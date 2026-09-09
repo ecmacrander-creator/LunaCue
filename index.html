@@ -6,7 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#F6F3EC">
-<title>Loop — symptom log</title>
+<link rel="apple-touch-icon" href="hem-icon.png">
+<link rel="icon" href="hem-icon.png">
+<title>Hem — symptom log</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -171,6 +173,22 @@
   }
   button.primary:active{background:var(--plum-dark);}
   button.primary.saved{background:var(--sage);}
+  .secondary-btn{
+    display:block;
+    width:100%;
+    margin-bottom:8px;
+    padding:11px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--bg-alt);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    font-size:13.5px;
+    cursor:pointer;
+  }
+  .secondary-btn:last-of-type{margin-bottom:0;}
+  .secondary-btn:active{background:var(--line);}
   .empty-state{
     text-align:center;
     padding:36px 16px;
@@ -285,7 +303,7 @@
 <body>
 <div id="shell">
   <header>
-    <div class="eyebrow">Loop</div>
+    <div class="eyebrow">Hem</div>
     <h1>Symptom log</h1>
     <div class="today mono" id="today-label"></div>
   </header>
@@ -544,6 +562,70 @@ function updateCycleLength(val){
   render();
 }
 
+function triggerDownload(content, filename, mimeType){
+  const blob = new Blob([content], {type: mimeType});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Full backup — everything needed to restore the app exactly, including
+// your custom symptoms/meds and cycle length. Re-importable.
+function exportBackup(){
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    entries: state.entries,
+    cycleLength: state.cycleLength,
+    customSymptoms: state.customSymptoms,
+    customMeds: state.customMeds
+  };
+  triggerDownload(JSON.stringify(payload, null, 2), `hem-backup-${todayISO()}.json`, 'application/json');
+}
+
+// Human-readable spreadsheet export — one row per day, good for sharing
+// with a doctor or reviewing in Excel/Numbers/Sheets.
+function exportCSV(){
+  const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = s.label);
+  const medMap = {}; allMeds().forEach(m => medMap[m.id] = m.label);
+  const rows = [['Date','Symptoms','Meds taken','Notes']];
+  const sorted = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
+  for(const e of sorted){
+    const symptomsStr = (e.symptoms||[]).map(id => symptomMap[id] || id).join('; ');
+    const medsStr = (e.meds||[]).map(id => medMap[id] || id).join('; ');
+    rows.push([e.date, symptomsStr, medsStr, (e.notes||'').replace(/\n/g,' ')]);
+  }
+  const csv = rows.map(r => r.map(f => '"' + String(f).replace(/"/g,'""') + '"').join(',')).join('\n');
+  triggerDownload(csv, `hem-export-${todayISO()}.csv`, 'text/csv');
+}
+
+async function importBackupFile(file){
+  const text = await file.text();
+  let parsed;
+  try{
+    parsed = JSON.parse(text);
+  }catch(e){
+    alert("Could not read that file — make sure it's a Hem backup .json file.");
+    return;
+  }
+  if(!Array.isArray(parsed.entries)){
+    alert("That file doesn't look like a Hem backup.");
+    return;
+  }
+  if(!confirm(`Import ${parsed.entries.length} entries? This replaces everything currently in the app on this device.`)) return;
+  state.entries = parsed.entries || [];
+  state.cycleLength = parsed.cycleLength || 28;
+  state.customSymptoms = parsed.customSymptoms || [];
+  state.customMeds = parsed.customMeds || [];
+  await saveData();
+  render();
+  alert('Import complete.');
+}
+
 function renderStorageBanner(){
   if(storageAvailable) return '';
   return '<div class="banner">This browser is blocking on-device storage (common in private/incognito mode), so entries won\'t save between visits. Try opening this file in a normal Safari tab.</div>';
@@ -666,6 +748,16 @@ function renderPatterns(){
         <h3>Not enough data yet</h3>
         <p>Log at least a few days — patterns start to show once you have some history.</p>
       </div>
+      <div class="card">
+        <span class="section-label">Backup &amp; export</span>
+        <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
+        <button class="secondary-btn" id="export-csv-btn">Export as spreadsheet (.csv)</button>
+        <button class="secondary-btn" id="import-backup-btn">Restore from backup</button>
+        <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+        <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">
+          Moving to a new device or a new version of this app? Restore your backup file here.
+        </p>
+      </div>
     `;
   }
 
@@ -688,6 +780,9 @@ function renderPatterns(){
 
   const counts = {};
   rings.forEach(r => counts[r.id] = 0);
+  const medCounts = {};
+  allMeds().forEach(m => medCounts[m.id] = 0);
+  const symptomDayIdxs = {};
 
   let dotsSvg = '';
   for(const e of state.entries){
@@ -698,11 +793,15 @@ function renderPatterns(){
       const ringIndex = rings.findIndex(r => r.id === id);
       if(ringIndex === -1) return;
       counts[id] = (counts[id] || 0) + 1;
+      (symptomDayIdxs[id] = symptomDayIdxs[id] || []).push(dayIdx);
       const rad = innerR + spacing * (ringIndex + 0.5);
       const x = cx + rad * Math.cos(angle);
       const y = cy + rad * Math.sin(angle);
       const color = rings[ringIndex].color;
       dotsSvg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.2" fill="${color}" fill-opacity="0.82" stroke="var(--card)" stroke-width="0.8"/>`;
+    });
+    (e.meds || []).forEach(id => {
+      medCounts[id] = (medCounts[id] || 0) + 1;
     });
   }
 
@@ -725,6 +824,45 @@ function renderPatterns(){
     </div>
   `).join('');
 
+  // --- Insights: plain-language summary of what's in the data so far.
+  // Kept descriptive, not diagnostic — useful things to bring up with a doctor.
+  const spanDays = daysBetween(anchor, sortedByDate[sortedByDate.length-1].date) + 1;
+  const topSymptoms = rings
+    .map(r => ({label: r.label, n: counts[r.id] || 0}))
+    .filter(x => x.n > 0)
+    .sort((a,b) => b.n - a.n)
+    .slice(0, 3);
+  const topMeds = allMeds()
+    .map(m => ({label: m.label, n: medCounts[m.id] || 0}))
+    .filter(x => x.n > 0)
+    .sort((a,b) => b.n - a.n)
+    .slice(0, 3);
+
+  let clusterNote = '';
+  if(topSymptoms.length){
+    const topId = rings.find(r => r.label === topSymptoms[0].label)?.id;
+    const idxs = symptomDayIdxs[topId] || [];
+    if(idxs.length >= 3){
+      const bucketSize = Math.max(1, Math.round(cycleLength/4));
+      const bucketCounts = {};
+      idxs.forEach(d => { const b = Math.floor(d/bucketSize); bucketCounts[b] = (bucketCounts[b]||0)+1; });
+      const buckets = Object.entries(bucketCounts).sort((a,b) => b[1]-a[1]);
+      const [topBucket, topBucketCount] = buckets[0];
+      if(topBucketCount / idxs.length >= 0.5){
+        const startDay = Number(topBucket)*bucketSize + 1;
+        const endDay = Math.min(cycleLength, startDay + bucketSize - 1);
+        clusterNote = `<li>${escapeHtml(topSymptoms[0].label)} shows up most often around days ${startDay}–${endDay} of your ${cycleLength}-day cycle in the data so far.</li>`;
+      }
+    }
+  }
+
+  const insightsList = `
+    <li>${state.entries.length} day${state.entries.length===1?'':'s'} logged over ${spanDays} day${spanDays===1?'':'s'}, starting ${fmtDate(anchor)}.</li>
+    ${topSymptoms.length ? `<li>Most logged symptom${topSymptoms.length>1?'s':''}: ${topSymptoms.map(s=>`${escapeHtml(s.label)} (${s.n})`).join(', ')}.</li>` : ''}
+    ${topMeds.length ? `<li>Most taken med${topMeds.length>1?'s':''}: ${topMeds.map(m=>`${escapeHtml(m.label)} (${m.n})`).join(', ')}.</li>` : ''}
+    ${clusterNote}
+  `;
+
   return `
     ${renderStorageBanner()}
     <div class="card">
@@ -740,6 +878,28 @@ function renderPatterns(){
       </p>
       <div class="legend">${legend}</div>
     </div>
+
+    <div class="card">
+      <span class="section-label">What the data shows so far</span>
+      <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.6;color:var(--ink);">
+        ${insightsList}
+      </ul>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">
+        These are just counts and patterns from what you've logged — worth bringing up with your doctor, not a diagnosis.
+      </p>
+    </div>
+
+    <div class="card">
+      <span class="section-label">Backup &amp; export</span>
+      <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
+      <button class="secondary-btn" id="export-csv-btn">Export as spreadsheet (.csv)</button>
+      <button class="secondary-btn" id="import-backup-btn">Restore from backup</button>
+      <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">
+        The backup file is the only way to move your entries to a new device or a new version of this app — keep a copy somewhere safe (Files, email to yourself, iCloud).
+      </p>
+    </div>
+
     <p class="footer-note">First entry logged: ${fmtDate(anchor)} — used as the wheel's starting point.
       <button id="clear-data-btn">Clear all data</button>
     </p>
@@ -815,6 +975,18 @@ function attachHandlers(){
       render();
     }
   });
+  const exportBackupBtn = document.getElementById('export-backup-btn');
+  if(exportBackupBtn) exportBackupBtn.addEventListener('click', exportBackup);
+  const exportCsvBtn = document.getElementById('export-csv-btn');
+  if(exportCsvBtn) exportCsvBtn.addEventListener('click', exportCSV);
+  const importBtn = document.getElementById('import-backup-btn');
+  const importInput = document.getElementById('import-file-input');
+  if(importBtn && importInput){
+    importBtn.addEventListener('click', () => importInput.click());
+    importInput.addEventListener('change', (e) => {
+      if(e.target.files && e.target.files[0]) importBackupFile(e.target.files[0]);
+    });
+  }
 }
 
 document.querySelectorAll('nav.tabbar button').forEach(btn => {
