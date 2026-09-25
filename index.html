@@ -148,6 +148,72 @@
     color:var(--ink-soft);
     margin-bottom:6px;
   }
+  .timing-table{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .timing-row-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13.5px;
+    font-weight:600;
+    color:var(--ink);
+    margin-bottom:6px;
+  }
+  .timing-occs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .timing-chip{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    background:var(--bg-alt);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:4px 8px;
+    font-size:12px;
+    color:var(--ink);
+  }
+  .timing-chip-month{
+    color:var(--ink-soft);
+    font-size:11px;
+  }
+  .history-filter-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:8px;
+    flex-wrap:wrap;
+  }
+  .history-filter-row select{
+    flex:1 1 auto;
+    min-width:0;
+    padding:6px 8px;
+    font-size:12.5px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--bg-alt);
+    color:var(--ink);
+  }
+  .history-filter-row .link-btn{
+    white-space:nowrap;
+    font-size:12px;
+  }
+  .timing-group-label{
+    font-size:11.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink-soft);
+    margin:14px 0 8px;
+  }
+  .timing-group-label:first-child{
+    margin-top:0;
+  }
   .symptom-toggle{
     display:flex;
     align-items:center;
@@ -467,6 +533,9 @@ let state = {
   loaded: false,
   view: 'log',
   historyFilter: '',
+  historyMonth: '', // '' = all months, else 'YYYY-MM'
+  historyDay: '', // '' = all days, else '1'-'31' (day of month)
+  historySort: 'date', // 'date' or 'cycleDay'
   editing: null, // date string of the entry currently being edited, or null
   justSaved: false, // briefly true right after a successful save, to show a checkmark
   form: { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} }
@@ -509,6 +578,10 @@ function fmtWeekday(iso){
   const [y,m,d] = iso.split('-').map(Number);
   return new Date(y,m-1,d).toLocaleDateString(undefined, {weekday:'short'});
 }
+function fmtMonthShort(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString(undefined, {month:'short'});
+}
 function fmtMonthHeader(iso){
   const [y,m] = iso.split('-').map(Number);
   return new Date(y,m-1,1).toLocaleDateString(undefined, {month:'long', year:'numeric'});
@@ -519,6 +592,68 @@ function daysBetween(aISO, bISO){
   const a = Date.UTC(ay,am-1,ad);
   const b = Date.UTC(by,bm-1,bd);
   return Math.round((b-a)/86400000);
+}
+function addDays(iso, n){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d) + n*86400000);
+  return dt.toISOString().slice(0,10);
+}
+
+// No real period to anchor to (e.g. continuous/extended-cycle birth control),
+// so this looks for a repeating rhythm directly in symptom dates instead.
+// For each candidate cycle length it measures how tightly symptom days
+// cluster when wrapped onto that length (circular concentration, R close to
+// 1 = tight cluster, close to 0 = scattered) and keeps the length that
+// clusters best. It then finds where in that cycle symptoms tend to start
+// (the densest run of days) and returns the most recent real calendar date
+// matching that point, so it can be dropped straight into the cycle-length
+// and day-1 fields.
+function suggestCycleParams(){
+  const dates = [...new Set(state.entries.filter(e => (e.symptoms||[]).length > 0).map(e => e.date))];
+  if(dates.length < 8) return {needMoreData: true};
+  const epoch = dates.reduce((min, d) => d < min ? d : min, dates[0]);
+  const dayNums = dates.map(d => daysBetween(epoch, d));
+  const span = Math.max(...dayNums) - Math.min(...dayNums) + 1;
+
+  // Testing a candidate cycle length longer than the data actually spans
+  // (well, spans twice over) gives a falsely tight-looking cluster just
+  // because the points never get the chance to wrap around and land far
+  // apart — so candidates are capped at half the logged span, and if that
+  // doesn't leave room for a plausible cycle length, there just isn't
+  // enough history yet to say anything reliable.
+  const maxL = Math.min(45, Math.floor(span/2));
+  if(maxL < 14) return {needMoreData: true};
+
+  let best = null;
+  for(let L = 14; L <= maxL; L++){
+    let sumCos = 0, sumSin = 0;
+    dayNums.forEach(d => {
+      const angle = ((d % L) / L) * 2 * Math.PI;
+      sumCos += Math.cos(angle);
+      sumSin += Math.sin(angle);
+    });
+    const R = Math.sqrt(sumCos*sumCos + sumSin*sumSin) / dayNums.length;
+    if(!best || R > best.R) best = {L, R};
+  }
+
+  const L = best.L;
+  const counts = new Array(L).fill(0);
+  dayNums.forEach(d => counts[((d % L) + L) % L]++);
+  const w = Math.max(3, Math.round(L/6));
+  let bestWindow = {start: 0, sum: -1};
+  for(let s = 0; s < L; s++){
+    let sum = 0;
+    for(let k = 0; k < w; k++) sum += counts[(s+k) % L];
+    if(sum > bestWindow.sum) bestWindow = {start: s, sum};
+  }
+  const leadDay = bestWindow.start;
+
+  const totalOffsetToToday = daysBetween(epoch, todayISO());
+  const k = Math.floor((totalOffsetToToday - leadDay) / L);
+  const anchorOffset = leadDay + k*L;
+  const anchorDate = addDays(epoch, anchorOffset);
+
+  return {cycleLength: L, anchorDate, confidence: best.R, dataPoints: dayNums.length};
 }
 function slugify(str){
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
@@ -766,6 +901,38 @@ function daysSinceLastLog(){
   return daysBetween(mostRecent, todayISO());
 }
 
+// For each item (symptom or med) logged 2+ times, lists every occurrence as
+// its cycle day plus the month it happened in — lets the person visually
+// compare whether something lands on the same or nearby cycle day across
+// different months. `field` is 'symptoms' or 'meds'.
+function computeCycleTimingRows(items, field){
+  const rows = items.map(s => {
+    const occ = state.entries
+      .filter(e => (e[field]||[]).includes(s.id))
+      .map(e => ({date: e.date, day: cycleDayFor(e.date)}))
+      .sort((a,b) => a.day - b.day);
+    return {symptom: s, occ};
+  }).filter(r => r.occ.length >= 2);
+  rows.sort((a,b) => b.occ.length - a.occ.length);
+  return rows;
+}
+
+// Looks at a candidate date's cycle day and flags any symptom that has
+// already shown up on that same cycle day 2+ times before (excluding the
+// date itself) — surfaces a "this tends to happen around here" hint while
+// logging, instead of making the person go check the Patterns tab.
+function computeRecurrenceHints(dateISO){
+  if(state.entries.length < 3) return [];
+  const targetDay = cycleDayFor(dateISO);
+  return allSymptoms()
+    .map(s => {
+      const n = state.entries.filter(e => e.date !== dateISO && (e.symptoms||[]).includes(s.id) && cycleDayFor(e.date) === targetDay).length;
+      return {symptom: s, n};
+    })
+    .filter(h => h.n >= 2)
+    .sort((a,b) => b.n - a.n);
+}
+
 // Counts how often each pair of symptoms was logged on the same day —
 // surfaces combinations worth noticing without the person spotting them by eye.
 function computeCooccurrence(rings){
@@ -924,10 +1091,18 @@ function renderLog(){
     </div>
   ` : '';
 
+  const recurrenceHints = computeRecurrenceHints(f.date);
+  const recurrenceBanner = recurrenceHints.length ? `
+    <div class="banner nudge">
+      Day ${cycleDayFor(f.date)} of your cycle — ${recurrenceHints.map(h => `${escapeHtml(h.symptom.label)} (${h.n}x)`).join(', ')} ${recurrenceHints.length > 1 ? 'have' : 'has'} shown up here before.
+    </div>
+  ` : '';
+
   return `
     ${renderStorageBanner()}
     ${editingBanner}
     ${reminderBanner}
+    ${recurrenceBanner}
     <div class="card">
       <span class="section-label">Date</span>
       <input type="date" id="date-input" value="${f.date}" max="${todayISO()}">
@@ -970,39 +1145,66 @@ function renderHistory(){
   const medMap = {};
   allMeds().forEach(m => medMap[m.id] = m);
 
-  const searchBar = `
+  // Options for the month/day filters, built from what's actually logged.
+  const monthsPresent = [...new Set(state.entries.map(e => e.date.slice(0,7)))].sort().reverse();
+  const daysPresent = [...new Set(state.entries.map(e => Number(e.date.slice(8,10))))].sort((a,b)=>a-b);
+  const monthOptions = monthsPresent.map(m => {
+    const label = new Date(Number(m.slice(0,4)), Number(m.slice(5,7))-1, 1).toLocaleDateString(undefined, {month:'long', year:'numeric'});
+    return `<option value="${m}" ${state.historyMonth===m?'selected':''}>${label}</option>`;
+  }).join('');
+  const dayOptions = daysPresent.map(d => `<option value="${d}" ${Number(state.historyDay)===d?'selected':''}>${d}</option>`).join('');
+
+  const filterBar = `
     <div class="card" style="padding:10px 12px;margin-bottom:14px;">
       <input type="text" id="history-search" placeholder="Search symptoms, meds, or notes" value="${escapeHtml(state.historyFilter)}">
+      <div class="history-filter-row">
+        <select id="history-month-filter">
+          <option value="">All months</option>
+          ${monthOptions}
+        </select>
+        <select id="history-day-filter">
+          <option value="">All days</option>
+          ${dayOptions}
+        </select>
+        <button id="history-sort-toggle" class="link-btn" type="button">${state.historySort === 'cycleDay' ? 'Sorted by cycle day' : 'Sort by cycle day'}</button>
+      </div>
     </div>
   `;
 
   const filterText = state.historyFilter.trim().toLowerCase();
-  const entries = filterText ? state.entries.filter(e => {
+  let entries = state.entries.filter(e => {
+    if(state.historyMonth && e.date.slice(0,7) !== state.historyMonth) return false;
+    if(state.historyDay && Number(e.date.slice(8,10)) !== Number(state.historyDay)) return false;
+    if(!filterText) return true;
     const symptomLabels = (e.symptoms||[]).map(id => symptomMap[id]?.label || '').join(' ').toLowerCase();
     const medLabels = (e.meds||[]).map(id => medMap[id]?.label || '').join(' ').toLowerCase();
     const notes = (e.notes||'').toLowerCase();
     const dateStr = fmtDate(e.date).toLowerCase();
     return symptomLabels.includes(filterText) || medLabels.includes(filterText) || notes.includes(filterText) || dateStr.includes(filterText);
-  }) : state.entries;
+  });
+
+  if(state.historySort === 'cycleDay'){
+    entries = [...entries].sort((a,b) => cycleDayFor(a.date) - cycleDayFor(b.date) || (a.date < b.date ? 1 : -1));
+  }
 
   if(entries.length === 0){
     return `
       ${renderStorageBanner()}
-      ${searchBar}
+      ${filterBar}
       <div class="empty-state">
         <h3>No matches</h3>
-        <p>Nothing logged matches "${escapeHtml(state.historyFilter)}".</p>
+        <p>Nothing logged matches these filters.</p>
       </div>
     `;
   }
 
-  let html = renderStorageBanner() + searchBar;
-  let lastMonth = '';
+  let html = renderStorageBanner() + filterBar;
+  let lastGroup = '';
   for(const e of entries){
-    const monthKey = e.date.slice(0,7);
-    if(monthKey !== lastMonth){
-      html += `<div class="month-header">${fmtMonthHeader(e.date)}</div>`;
-      lastMonth = monthKey;
+    const groupKey = state.historySort === 'cycleDay' ? `Cycle day ${cycleDayFor(e.date)}` : fmtMonthHeader(e.date);
+    if(groupKey !== lastGroup){
+      html += `<div class="month-header">${groupKey}</div>`;
+      lastGroup = groupKey;
     }
     const tags = (e.symptoms||[]).map(id => {
       const s = symptomMap[id];
@@ -1176,6 +1378,10 @@ function renderPatterns(){
     ${clusterNote}
   `;
 
+  // --- Timing table: each symptom's/med's occurrences by cycle day + month.
+  const timingRows = computeCycleTimingRows(rings, 'symptoms');
+  const medTimingRows = computeCycleTimingRows(allMeds(), 'meds');
+
   // --- Co-occurrence: which symptom pairs tend to land on the same day.
   const pairCounts = computeCooccurrence(rings);
   const symptomLabelMap = {};
@@ -1206,12 +1412,66 @@ function renderPatterns(){
       </div>
       ${state.cycleAnchor ? `<button id="reset-anchor-btn" class="link-btn" style="margin:-10px 0 16px;">Use first entry instead</button>` : ''}
 
+      ${(() => {
+        const suggestion = suggestCycleParams();
+        if(!suggestion || suggestion.needMoreData) return `<p style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 16px;">Log symptom days spanning about 8 weeks and this can suggest a cycle length and day 1 for you, based on when symptoms tend to repeat — useful since birth control doesn't give you a real cycle to anchor on. Keep going.</p>`;
+        if(suggestion.confidence < 0.25){
+          return `<p style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 16px;">Checked for a repeating rhythm in your ${suggestion.dataPoints} symptom days, but nothing stands out yet — could mean there isn't a strong cycle, or just needs more data. Keep logging.</p>`;
+        }
+        const strength = suggestion.confidence >= 0.45 ? 'a fairly clear' : 'a rough';
+        return `
+          <div class="banner nudge" style="margin:-6px 0 16px;">
+            Based on ${suggestion.dataPoints} symptom days, there's ${strength} repeating pattern roughly every <strong>${suggestion.cycleLength} days</strong>, with symptoms tending to start around <strong>${fmtDate(suggestion.anchorDate)}</strong>-ish in that rhythm.
+            <br><button id="apply-suggested-cycle-btn" class="link-btn" data-length="${suggestion.cycleLength}" data-anchor="${suggestion.anchorDate}" style="margin-top:6px;">Use this cycle length &amp; day 1</button>
+          </div>
+        `;
+      })()}
+
       <div class="wheel-wrap">${svg}</div>
       <p style="font-size:12.5px;color:var(--ink-soft);text-align:center;margin:10px 0 0;">
         Each dot is a day a symptom was logged, placed by where that day fell in the cycle above.
         Dots clustering around the same angle across rings hint at a cyclical pattern.
       </p>
       <div class="legend">${legend}</div>
+    </div>
+
+    <div class="card">
+      <span class="section-label">Timing across months</span>
+      ${(timingRows.length || medTimingRows.length) ? `
+        ${timingRows.length ? `
+          <div class="timing-group-label">Symptoms</div>
+          <div class="timing-table">
+            ${timingRows.map(r => `
+              <div class="timing-row">
+                <div class="timing-row-label">
+                  <span class="dot" style="background:${r.symptom.color}"></span>${escapeHtml(r.symptom.label)}
+                </div>
+                <div class="timing-occs">
+                  ${r.occ.map(o => `<span class="timing-chip">Day ${o.day} <span class="timing-chip-month">${fmtMonthShort(o.date)}</span></span>`).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        ${medTimingRows.length ? `
+          <div class="timing-group-label">Meds</div>
+          <div class="timing-table">
+            ${medTimingRows.map(r => `
+              <div class="timing-row">
+                <div class="timing-row-label">
+                  <span class="dot" style="background:${r.symptom.color}"></span>${escapeHtml(r.symptom.label)}
+                </div>
+                <div class="timing-occs">
+                  ${r.occ.map(o => `<span class="timing-chip">Day ${o.day} <span class="timing-chip-month">${fmtMonthShort(o.date)}</span></span>`).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">
+          Each chip is one occurrence, showing where it fell in your ${cycleLength}-day cycle. Chips clustered on close-together day numbers across different months point to a cyclical pattern.
+        </p>
+      ` : `<p style="font-size:13px;color:var(--ink-soft);margin:0;">Not enough repeats yet — once something shows up on 2+ different days, it'll appear here so you can compare timing across months.</p>`}
     </div>
 
     <div class="card">
@@ -1295,7 +1555,7 @@ function attachHandlers(){
   const cleanDayBtn = document.getElementById('clean-day-btn');
   if(cleanDayBtn) cleanDayBtn.addEventListener('click', logCleanDay);
   const dateInput = document.getElementById('date-input');
-  if(dateInput) dateInput.addEventListener('change', e => { state.form.date = e.target.value; });
+  if(dateInput) dateInput.addEventListener('change', e => { state.form.date = e.target.value; render(); });
   const otherInput = document.getElementById('other-input');
   if(otherInput) otherInput.addEventListener('input', e => { state.form.other = e.target.value; });
   const otherMedsInput = document.getElementById('other-meds-input');
@@ -1320,6 +1580,11 @@ function attachHandlers(){
   if(anchorInput) anchorInput.addEventListener('change', e => updateCycleAnchor(e.target.value));
   const resetAnchorBtn = document.getElementById('reset-anchor-btn');
   if(resetAnchorBtn) resetAnchorBtn.addEventListener('click', resetCycleAnchor);
+  const applySuggestedCycleBtn = document.getElementById('apply-suggested-cycle-btn');
+  if(applySuggestedCycleBtn) applySuggestedCycleBtn.addEventListener('click', () => {
+    updateCycleLength(applySuggestedCycleBtn.getAttribute('data-length'));
+    updateCycleAnchor(applySuggestedCycleBtn.getAttribute('data-anchor'));
+  });
   const historySearch = document.getElementById('history-search');
   if(historySearch) historySearch.addEventListener('input', e => {
     state.historyFilter = e.target.value;
@@ -1327,6 +1592,21 @@ function attachHandlers(){
     render();
     const freshInput = document.getElementById('history-search');
     if(freshInput){ freshInput.focus(); freshInput.setSelectionRange(cursorPos, cursorPos); }
+  });
+  const historyMonthFilter = document.getElementById('history-month-filter');
+  if(historyMonthFilter) historyMonthFilter.addEventListener('change', e => {
+    state.historyMonth = e.target.value;
+    render();
+  });
+  const historyDayFilter = document.getElementById('history-day-filter');
+  if(historyDayFilter) historyDayFilter.addEventListener('change', e => {
+    state.historyDay = e.target.value;
+    render();
+  });
+  const historySortToggle = document.getElementById('history-sort-toggle');
+  if(historySortToggle) historySortToggle.addEventListener('click', () => {
+    state.historySort = state.historySort === 'cycleDay' ? 'date' : 'cycleDay';
+    render();
   });
   const clearBtn = document.getElementById('clear-data-btn');
   if(clearBtn) clearBtn.addEventListener('click', async () => {
