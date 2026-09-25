@@ -91,6 +91,22 @@
     padding:9px 12px;
     margin-bottom:16px;
   }
+  .banner.nudge{
+    color:var(--plum);
+    background:#EFE7EC;
+    border-color:#DCC9D6;
+  }
+  .link-btn{
+    background:none;
+    border:none;
+    color:var(--plum);
+    text-decoration:underline;
+    font-size:12px;
+    cursor:pointer;
+    font-family:inherit;
+    padding:0;
+    display:block;
+  }
   input[type="date"], input[type="number"], input[type="text"], textarea{
     width:100%;
     max-width:100%;
@@ -117,6 +133,20 @@
     display:grid;
     grid-template-columns:1fr 1fr;
     gap:8px;
+  }
+  .symptom-category{
+    margin-bottom:14px;
+  }
+  .symptom-category:last-child{
+    margin-bottom:0;
+  }
+  .symptom-category-label{
+    font-size:11.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink-soft);
+    margin-bottom:6px;
   }
   .symptom-toggle{
     display:flex;
@@ -189,6 +219,43 @@
   }
   .secondary-btn:last-of-type{margin-bottom:0;}
   .secondary-btn:active{background:var(--line);}
+  .secondary-btn.mt{margin-top:10px;}
+  .severity-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:4px;
+  }
+  .severity-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .severity-row-label{font-size:13px;color:var(--ink);flex:1;min-width:0;}
+  .severity-btns{display:flex;gap:6px;flex:none;}
+  .sev-btn{
+    border:1px solid var(--line);
+    background:var(--bg-alt);
+    color:var(--ink-soft);
+    border-radius:20px;
+    padding:5px 10px;
+    font-size:11px;
+    font-family:'Inter',sans-serif;
+    text-transform:capitalize;
+    cursor:pointer;
+  }
+  .sev-btn.active{
+    background:var(--plum);
+    border-color:var(--plum);
+    color:#fff;
+  }
+  .sev-dot{
+    font-size:7px;
+    letter-spacing:-1px;
+    opacity:0.9;
+  }
   .empty-state{
     text-align:center;
     padding:36px 16px;
@@ -220,6 +287,15 @@
   }
   .entry-row .date{font-weight:600;font-size:15px;}
   .entry-row .weekday{font-size:11.5px;color:var(--ink-soft);margin-left:6px;font-weight:400;}
+  .entry-row .cycle-day{
+    font-size:10.5px;
+    color:var(--plum);
+    background:var(--bg-alt);
+    border-radius:20px;
+    padding:2px 8px;
+    margin-left:8px;
+    font-family:'IBM Plex Mono',monospace;
+  }
   .entry-row .del{
     background:none;border:none;color:var(--ink-soft);
     font-size:12px;cursor:pointer;padding:4px 2px;
@@ -346,17 +422,71 @@ const BASE_MEDS = [
 const MEDS_CUSTOM_PALETTE = ['#4A6B8A','#6B4A8A','#8A6B4A','#4A8A6B','#8A4A6B','#6B8A4A','#4A4A8A','#8A8A4A'];
 const STORAGE_KEY = 'loop-tracker-data';
 
+// Groups symptoms into categories on the Log tab so the list is easier to
+// scan. Each built-in symptom gets an explicit category; a symptom you add
+// yourself is sorted in automatically by matching keywords in its label —
+// no extra tapping required, and nothing is stored, so it stays in sync
+// even if you rename how you think about it.
+const SYMPTOM_CATEGORIES = ['Mood & emotional', 'Head & sleep', 'Digestive', 'Pain & body', 'Other'];
+const CATEGORY_KEYWORDS = {
+  'Mood & emotional': ['anxi','irritab','mood','cry','fight','angry','sad','stress','overwhelm','depress','argu'],
+  'Head & sleep': ['migrain','headache','insomnia','sleep','tired','fatigue','dizzy','brain fog','brain','energy'],
+  'Digestive': ['nausea','bowel','stomach','gas','bloat','reflux','constipat','diarrhea','vomit','gut','appetite'],
+  'Pain & body': ['pain','ache','cramp','sore','tender','breast','groin','neck','back','joint','muscle','quadrant','headache']
+};
+const BASE_SYMPTOM_CATEGORY = {
+  'nausea': 'Digestive',
+  'migraine': 'Head & sleep',
+  'anxiety': 'Mood & emotional',
+  'irritable': 'Mood & emotional',
+  'bowel-frequent': 'Digestive',
+  'bowel-loose': 'Digestive',
+  'rlq-pain': 'Pain & body',
+  'insomnia': 'Head & sleep'
+};
+function categoryFor(symptom){
+  if(BASE_SYMPTOM_CATEGORY[symptom.id]) return BASE_SYMPTOM_CATEGORY[symptom.id];
+  const label = symptom.label.toLowerCase();
+  for(const cat of SYMPTOM_CATEGORIES){
+    const keywords = CATEGORY_KEYWORDS[cat];
+    if(keywords && keywords.some(k => label.includes(k))) return cat;
+  }
+  return 'Other';
+}
+
+const SEVERITY_LEVELS = ['mild', 'moderate', 'severe'];
+const SEVERITY_DOTS = {mild: '●', moderate: '●●', severe: '●●●'};
+
 let storageAvailable = true;
 let state = {
   entries: [],
   cycleLength: 28,
+  cycleAnchor: null, // manually-set "day 1" date; null = default to earliest entry
   customSymptoms: [],
   customMeds: [],
   loaded: false,
   view: 'log',
+  historyFilter: '',
   editing: null, // date string of the entry currently being edited, or null
-  form: { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '' }
+  justSaved: false, // briefly true right after a successful save, to show a checkmark
+  form: { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} }
 };
+
+// The date cycle day 1 counts from — a manual override if set, otherwise
+// the earliest logged entry. Shared by History's day badges and the
+// Patterns wheel so they always agree.
+function getAnchorDate(){
+  if(state.cycleAnchor) return state.cycleAnchor;
+  if(state.entries.length === 0) return todayISO();
+  const sorted = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
+  return sorted[0].date;
+}
+function cycleDayFor(dateISO){
+  const cycleLength = state.cycleLength;
+  const anchor = getAnchorDate();
+  const raw = daysBetween(anchor, dateISO) % cycleLength;
+  return (((raw % cycleLength) + cycleLength) % cycleLength) + 1;
+}
 
 function allSymptoms(){
   return BASE_SYMPTOMS.concat(state.customSymptoms);
@@ -404,6 +534,7 @@ function loadData(){
       const parsed = JSON.parse(raw);
       state.entries = parsed.entries || [];
       state.cycleLength = parsed.cycleLength || 28;
+      state.cycleAnchor = parsed.cycleAnchor || null;
       state.customSymptoms = parsed.customSymptoms || [];
       state.customMeds = parsed.customMeds || [];
     }
@@ -420,6 +551,7 @@ function saveData(){
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
       entries: state.entries,
       cycleLength: state.cycleLength,
+      cycleAnchor: state.cycleAnchor,
       customSymptoms: state.customSymptoms,
       customMeds: state.customMeds
     }));
@@ -437,8 +569,17 @@ function setView(v){
   render();
 }
 function toggleSymptom(id){
-  if(state.form.symptoms.has(id)) state.form.symptoms.delete(id);
-  else state.form.symptoms.add(id);
+  if(state.form.symptoms.has(id)){
+    state.form.symptoms.delete(id);
+    delete state.form.severity[id];
+  } else {
+    state.form.symptoms.add(id);
+  }
+  render();
+}
+function setSeverity(id, level){
+  if(state.form.severity[id] === level) delete state.form.severity[id];
+  else state.form.severity[id] = level;
   render();
 }
 function toggleMed(id){
@@ -497,14 +638,15 @@ function editEntry(date){
     meds: new Set(entry.meds || []),
     other: '',
     otherMeds: '',
-    notes: entry.notes || ''
+    notes: entry.notes || '',
+    severity: {...(entry.severity || {})}
   };
   state.view = 'log';
   render();
 }
 function cancelEdit(){
   state.editing = null;
-  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '' };
+  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} };
   render();
 }
 
@@ -518,20 +660,26 @@ async function saveEntry(){
 
   const idx = state.entries.findIndex(e => e.date === f.date);
   const isEditingThis = state.editing === f.date;
-  let finalSymptoms, finalMeds;
+  let finalSymptoms, finalMeds, finalSeverity;
   if(idx >= 0 && !isEditingThis){
     // Quick add to an existing day (not an explicit edit) — merge in.
     finalSymptoms = Array.from(new Set([...state.entries[idx].symptoms, ...symptomIds]));
     finalMeds = Array.from(new Set([...(state.entries[idx].meds||[]), ...medIds]));
+    finalSeverity = {...(state.entries[idx].severity||{}), ...f.severity};
   } else {
     // Explicit edit, or a brand new entry — use exactly what's checked now.
     finalSymptoms = symptomIds;
     finalMeds = medIds;
+    finalSeverity = {...f.severity};
   }
+  // Drop severity for any symptom that's no longer on the entry.
+  Object.keys(finalSeverity).forEach(id => { if(!finalSymptoms.includes(id)) delete finalSeverity[id]; });
+
   const entry = {
     date: f.date,
     symptoms: finalSymptoms,
     meds: finalMeds,
+    severity: finalSeverity,
     notes: f.notes.trim() || (idx >= 0 && !isEditingThis ? state.entries[idx].notes : '')
   };
   if(idx >= 0) state.entries[idx] = entry;
@@ -539,15 +687,17 @@ async function saveEntry(){
   state.entries.sort((a,b) => a.date < b.date ? 1 : -1);
 
   const ok = await saveData();
-  const btn = document.getElementById('save-btn');
-  if(btn){
-    btn.textContent = ok ? 'Saved' : 'Could not save on this device';
-    btn.classList.toggle('saved', ok);
-    setTimeout(() => { btn.textContent = 'Save entry'; btn.classList.remove('saved'); }, 1400);
-  }
   state.editing = null;
-  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '' };
-  render();
+  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} };
+  if(ok){
+    state.justSaved = true;
+    render();
+    setTimeout(() => { state.justSaved = false; render(); }, 1600);
+  } else {
+    state.justSaved = false;
+    render();
+    alert('Could not save on this device — check the storage warning above.');
+  }
 }
 async function deleteEntry(date){
   state.entries = state.entries.filter(e => e.date !== date);
@@ -560,6 +710,77 @@ function updateCycleLength(val){
   state.cycleLength = (n && n > 0 && n <= 90) ? n : state.cycleLength;
   saveData();
   render();
+}
+function updateCycleAnchor(val){
+  if(!val) return;
+  state.cycleAnchor = val;
+  saveData();
+  render();
+}
+function resetCycleAnchor(){
+  state.cycleAnchor = null;
+  saveData();
+  render();
+}
+
+// Logs today (or the selected date) as a deliberate "nothing to report"
+// day — distinct from simply not opening the app that day.
+async function logCleanDay(){
+  const f = state.form;
+  const idx = state.entries.findIndex(e => e.date === f.date);
+  if(idx >= 0){
+    const existing = state.entries[idx];
+    const hasData = (existing.symptoms||[]).length > 0 || (existing.meds||[]).length > 0;
+    if(hasData && !confirm('This day already has symptoms or meds logged. Replace it with a clean day (nothing to report)?')) return;
+  }
+  const entry = {
+    date: f.date,
+    symptoms: [],
+    meds: [],
+    severity: {},
+    notes: f.notes.trim() || (idx >= 0 ? state.entries[idx].notes : ''),
+    clean: true
+  };
+  if(idx >= 0) state.entries[idx] = entry;
+  else state.entries.push(entry);
+  state.entries.sort((a,b) => a.date < b.date ? 1 : -1);
+
+  const ok = await saveData();
+  state.editing = null;
+  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} };
+  if(ok){
+    state.justSaved = true;
+    render();
+    setTimeout(() => { state.justSaved = false; render(); }, 1600);
+  } else {
+    render();
+    alert('Could not save on this device — check the storage warning above.');
+  }
+}
+
+// How many days since the most recent logged entry — used for a gentle
+// reminder nudge on the Log tab. null if nothing's been logged yet.
+function daysSinceLastLog(){
+  if(state.entries.length === 0) return null;
+  const mostRecent = [...state.entries].sort((a,b) => a.date < b.date ? 1 : -1)[0].date;
+  return daysBetween(mostRecent, todayISO());
+}
+
+// Counts how often each pair of symptoms was logged on the same day —
+// surfaces combinations worth noticing without the person spotting them by eye.
+function computeCooccurrence(rings){
+  const ringIds = new Set(rings.map(r => r.id));
+  const pairCounts = {};
+  for(const e of state.entries){
+    const syms = (e.symptoms||[]).filter(id => ringIds.has(id));
+    for(let i=0;i<syms.length;i++){
+      for(let j=i+1;j<syms.length;j++){
+        const key = [syms[i],syms[j]].sort().join('|');
+        pairCounts[key] = (pairCounts[key]||0)+1;
+      }
+    }
+  }
+  return pairCounts;
 }
 
 function triggerDownload(content, filename, mimeType){
@@ -581,6 +802,7 @@ function exportBackup(){
     exportedAt: new Date().toISOString(),
     entries: state.entries,
     cycleLength: state.cycleLength,
+    cycleAnchor: state.cycleAnchor,
     customSymptoms: state.customSymptoms,
     customMeds: state.customMeds
   };
@@ -619,6 +841,7 @@ async function importBackupFile(file){
   if(!confirm(`Import ${parsed.entries.length} entries? This replaces everything currently in the app on this device.`)) return;
   state.entries = parsed.entries || [];
   state.cycleLength = parsed.cycleLength || 28;
+  state.cycleAnchor = parsed.cycleAnchor || null;
   state.customSymptoms = parsed.customSymptoms || [];
   state.customMeds = parsed.customMeds || [];
   await saveData();
@@ -636,12 +859,23 @@ function renderLog(){
   const baseSymptomIds = new Set(BASE_SYMPTOMS.map(s => s.id));
   const baseMedIds = new Set(BASE_MEDS.map(s => s.id));
 
-  const symptomChips = allSymptoms().map(s => {
+  const renderSymptomChip = s => {
     const removable = !baseSymptomIds.has(s.id);
     return `
     <div class="symptom-toggle ${f.symptoms.has(s.id) ? 'active' : ''}" data-toggle="${s.id}">
       <span class="dot" style="background:${s.color}"></span>${escapeHtml(s.label)}
       ${removable ? `<span class="chip-remove" data-remove-custom="${s.id}">&times;</span>` : ''}
+    </div>
+  `;
+  };
+
+  const symptomGroups = SYMPTOM_CATEGORIES.map(cat => {
+    const items = allSymptoms().filter(s => categoryFor(s) === cat);
+    if(!items.length) return '';
+    return `
+    <div class="symptom-category">
+      <div class="symptom-category-label">${cat}</div>
+      <div class="symptom-grid">${items.map(renderSymptomChip).join('')}</div>
     </div>
   `;
   }).join('');
@@ -656,25 +890,55 @@ function renderLog(){
   `;
   }).join('');
 
+  // Severity picker — only for symptoms already ticked above (a symptom
+  // typed into "Add new symptoms" needs to be saved once before it can
+  // get a severity, since it isn't a chip yet).
+  const checkedSymptoms = allSymptoms().filter(s => f.symptoms.has(s.id));
+  const severitySection = checkedSymptoms.length ? `
+    <label class="field-label">How bad? (optional)</label>
+    <div class="severity-list">
+      ${checkedSymptoms.map(s => `
+        <div class="severity-row">
+          <span class="severity-row-label">${escapeHtml(s.label)}</span>
+          <div class="severity-btns">
+            ${SEVERITY_LEVELS.map(level => `
+              <button type="button" class="sev-btn ${f.severity[s.id] === level ? 'active' : ''}" data-severity="${s.id}" data-level="${level}">${level}</button>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
   const editingBanner = state.editing ? `
-    <div class="banner" style="color:var(--plum);background:#EFE7EC;border-color:#DCC9D6;">
+    <div class="banner nudge">
       Editing ${fmtDate(state.editing)}.
-      <button id="cancel-edit-btn" style="background:none;border:none;color:var(--plum);text-decoration:underline;font-size:12px;cursor:pointer;font-family:inherit;padding:0;margin-left:4px;">Cancel</button>
+      <button id="cancel-edit-btn" class="link-btn">Cancel</button>
+    </div>
+  ` : '';
+
+  const daysSince = daysSinceLastLog();
+  const reminderBanner = (!state.editing && daysSince !== null && daysSince >= 2) ? `
+    <div class="banner nudge">
+      Last logged ${daysSince} days ago — log today when you get a chance.
     </div>
   ` : '';
 
   return `
     ${renderStorageBanner()}
     ${editingBanner}
+    ${reminderBanner}
     <div class="card">
       <span class="section-label">Date</span>
       <input type="date" id="date-input" value="${f.date}" max="${todayISO()}">
 
       <label class="field-label">Symptoms today (tap all that apply)</label>
-      <div class="symptom-grid">${symptomChips}</div>
+      ${symptomGroups}
       <label class="field-label">Add new symptoms</label>
       <input type="text" id="other-input" placeholder="e.g. dizziness, dry mouth" value="${escapeHtml(f.other)}">
       <div class="hint">Separate multiple with commas — each becomes its own option, added permanently. Tap the × on a custom chip above to remove it later.</div>
+
+      ${severitySection}
 
       <label class="field-label">Meds taken</label>
       <div class="symptom-grid">${medChips}</div>
@@ -684,7 +948,8 @@ function renderLog(){
 
       <label class="field-label">Notes</label>
       <textarea id="notes-input" placeholder="Anything else worth remembering">${escapeHtml(f.notes)}</textarea>
-      <button class="primary" id="save-btn">${state.editing ? 'Update entry' : 'Save entry'}</button>
+      <button class="primary ${state.justSaved ? 'saved' : ''}" id="save-btn">${state.justSaved ? '&#10003; Saved' : (state.editing ? 'Update entry' : 'Save entry')}</button>
+      ${!state.editing ? `<button type="button" class="secondary-btn mt" id="clean-day-btn">Log a clean day (no symptoms)</button>` : ''}
     </div>
     <p class="footer-note">Entries save right on this device — nothing leaves your phone.</p>
   `;
@@ -705,33 +970,65 @@ function renderHistory(){
   const medMap = {};
   allMeds().forEach(m => medMap[m.id] = m);
 
-  let html = renderStorageBanner();
+  const searchBar = `
+    <div class="card" style="padding:10px 12px;margin-bottom:14px;">
+      <input type="text" id="history-search" placeholder="Search symptoms, meds, or notes" value="${escapeHtml(state.historyFilter)}">
+    </div>
+  `;
+
+  const filterText = state.historyFilter.trim().toLowerCase();
+  const entries = filterText ? state.entries.filter(e => {
+    const symptomLabels = (e.symptoms||[]).map(id => symptomMap[id]?.label || '').join(' ').toLowerCase();
+    const medLabels = (e.meds||[]).map(id => medMap[id]?.label || '').join(' ').toLowerCase();
+    const notes = (e.notes||'').toLowerCase();
+    const dateStr = fmtDate(e.date).toLowerCase();
+    return symptomLabels.includes(filterText) || medLabels.includes(filterText) || notes.includes(filterText) || dateStr.includes(filterText);
+  }) : state.entries;
+
+  if(entries.length === 0){
+    return `
+      ${renderStorageBanner()}
+      ${searchBar}
+      <div class="empty-state">
+        <h3>No matches</h3>
+        <p>Nothing logged matches "${escapeHtml(state.historyFilter)}".</p>
+      </div>
+    `;
+  }
+
+  let html = renderStorageBanner() + searchBar;
   let lastMonth = '';
-  for(const e of state.entries){
+  for(const e of entries){
     const monthKey = e.date.slice(0,7);
     if(monthKey !== lastMonth){
       html += `<div class="month-header">${fmtMonthHeader(e.date)}</div>`;
       lastMonth = monthKey;
     }
-    const tags = e.symptoms.map(id => {
+    const tags = (e.symptoms||[]).map(id => {
       const s = symptomMap[id];
-      return s ? `<span class="tag" style="background:${s.color}">${escapeHtml(s.label)}</span>` : '';
+      if(!s) return '';
+      const sev = (e.severity||{})[id];
+      const sevBadge = sev ? ` <span class="sev-dot" title="${sev}">${SEVERITY_DOTS[sev]}</span>` : '';
+      return `<span class="tag" style="background:${s.color}">${escapeHtml(s.label)}${sevBadge}</span>`;
     }).join('');
     const medTags = (e.meds || []).map(id => {
       const m = medMap[id];
       return m ? `<span class="tag" style="background:${m.color}">${escapeHtml(m.label)}</span>` : '';
     }).join('');
+    const isClean = (e.symptoms||[]).length === 0 && (e.meds||[]).length === 0;
+
+    const cycleDay = cycleDayFor(e.date);
 
     html += `
       <div class="entry-row">
         <div class="top">
-          <div><span class="date">${fmtDate(e.date)}</span><span class="weekday">${fmtWeekday(e.date)}</span></div>
+          <div><span class="date">${fmtDate(e.date)}</span><span class="weekday">${fmtWeekday(e.date)}</span><span class="cycle-day">day ${cycleDay}</span></div>
           <div>
             <button class="del" data-edit="${e.date}">edit</button>
             <button class="del" data-del="${e.date}">delete</button>
           </div>
         </div>
-        <div class="tags">${tags || '<span style="color:var(--ink-soft);font-size:12.5px;">no symptoms marked</span>'}</div>
+        <div class="tags">${tags || (isClean ? '<span class="tag" style="background:var(--sage)">No symptoms</span>' : '')}</div>
         ${medTags ? `<div class="tags" style="margin-top:2px;"><span style="font-size:11px;color:var(--ink-soft);margin-right:4px;align-self:center;">Took:</span>${medTags}</div>` : ''}
         ${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ''}
       </div>
@@ -764,7 +1061,8 @@ function renderPatterns(){
   const rings = allSymptoms();
   const cycleLength = state.cycleLength;
   const sortedByDate = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
-  const anchor = sortedByDate[0].date;
+  const earliestEntryDate = sortedByDate[0].date;
+  const anchor = getAnchorDate();
 
   const cx = 170, cy = 170, innerR = 46, outerR = 160;
   const spacing = (outerR - innerR) / rings.length;
@@ -826,7 +1124,8 @@ function renderPatterns(){
 
   // --- Insights: plain-language summary of what's in the data so far.
   // Kept descriptive, not diagnostic — useful things to bring up with a doctor.
-  const spanDays = daysBetween(anchor, sortedByDate[sortedByDate.length-1].date) + 1;
+  const spanDays = daysBetween(earliestEntryDate, sortedByDate[sortedByDate.length-1].date) + 1;
+  const cleanDayCount = state.entries.filter(e => (e.symptoms||[]).length === 0 && (e.meds||[]).length === 0).length;
   const topSymptoms = rings
     .map(r => ({label: r.label, n: counts[r.id] || 0}))
     .filter(x => x.n > 0)
@@ -835,6 +1134,18 @@ function renderPatterns(){
   const topMeds = allMeds()
     .map(m => ({label: m.label, n: medCounts[m.id] || 0}))
     .filter(x => x.n > 0)
+    .sort((a,b) => b.n - a.n)
+    .slice(0, 3);
+
+  const severeCounts = {};
+  for(const e of state.entries){
+    Object.entries(e.severity || {}).forEach(([id, level]) => {
+      if(level !== 'severe') return;
+      severeCounts[id] = (severeCounts[id]||0) + 1;
+    });
+  }
+  const topSevere = Object.entries(severeCounts)
+    .map(([id, n]) => ({label: (rings.find(r=>r.id===id)||{}).label || id, n}))
     .sort((a,b) => b.n - a.n)
     .slice(0, 3);
 
@@ -857,11 +1168,27 @@ function renderPatterns(){
   }
 
   const insightsList = `
-    <li>${state.entries.length} day${state.entries.length===1?'':'s'} logged over ${spanDays} day${spanDays===1?'':'s'}, starting ${fmtDate(anchor)}.</li>
+    <li>${state.entries.length} day${state.entries.length===1?'':'s'} logged over ${spanDays} day${spanDays===1?'':'s'}, starting ${fmtDate(earliestEntryDate)}.</li>
+    ${cleanDayCount ? `<li>${cleanDayCount} clean day${cleanDayCount===1?'':'s'} logged (nothing to report).</li>` : ''}
     ${topSymptoms.length ? `<li>Most logged symptom${topSymptoms.length>1?'s':''}: ${topSymptoms.map(s=>`${escapeHtml(s.label)} (${s.n})`).join(', ')}.</li>` : ''}
     ${topMeds.length ? `<li>Most taken med${topMeds.length>1?'s':''}: ${topMeds.map(m=>`${escapeHtml(m.label)} (${m.n})`).join(', ')}.</li>` : ''}
+    ${topSevere.length ? `<li>Logged as severe: ${topSevere.map(s=>`${escapeHtml(s.label)} (${s.n})`).join(', ')}.</li>` : ''}
     ${clusterNote}
   `;
+
+  // --- Co-occurrence: which symptom pairs tend to land on the same day.
+  const pairCounts = computeCooccurrence(rings);
+  const symptomLabelMap = {};
+  rings.forEach(r => symptomLabelMap[r.id] = r);
+  const topPairs = Object.entries(pairCounts)
+    .filter(([,n]) => n >= 2)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 5)
+    .map(([key, n]) => {
+      const [idA, idB] = key.split('|');
+      return {a: symptomLabelMap[idA], b: symptomLabelMap[idB], n};
+    })
+    .filter(p => p.a && p.b);
 
   return `
     ${renderStorageBanner()}
@@ -871,6 +1198,14 @@ function renderPatterns(){
         <input type="number" id="cycle-input" value="${cycleLength}" min="14" max="90">
         <span>days — adjust to match your pill pack or what feels right</span>
       </div>
+
+      <span class="section-label">Cycle day 1</span>
+      <div class="cycle-input-row">
+        <input type="date" id="anchor-input" value="${anchor}" max="${todayISO()}">
+        <span>${state.cycleAnchor ? 'set manually' : `defaults to your first entry (${fmtDate(earliestEntryDate)})`}</span>
+      </div>
+      ${state.cycleAnchor ? `<button id="reset-anchor-btn" class="link-btn" style="margin:-10px 0 16px;">Use first entry instead</button>` : ''}
+
       <div class="wheel-wrap">${svg}</div>
       <p style="font-size:12.5px;color:var(--ink-soft);text-align:center;margin:10px 0 0;">
         Each dot is a day a symptom was logged, placed by where that day fell in the cycle above.
@@ -890,6 +1225,15 @@ function renderPatterns(){
     </div>
 
     <div class="card">
+      <span class="section-label">Symptoms that show up together</span>
+      ${topPairs.length ? `
+        <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;color:var(--ink);">
+          ${topPairs.map(p => `<li>${escapeHtml(p.a.label)} + ${escapeHtml(p.b.label)} — ${p.n} day${p.n===1?'':'s'} together</li>`).join('')}
+        </ul>
+      ` : `<p style="font-size:13px;color:var(--ink-soft);margin:0;">Not enough overlap yet — keep logging and pairs will show up here.</p>`}
+    </div>
+
+    <div class="card">
       <span class="section-label">Backup &amp; export</span>
       <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
       <button class="secondary-btn" id="export-csv-btn">Export as spreadsheet (.csv)</button>
@@ -900,7 +1244,7 @@ function renderPatterns(){
       </p>
     </div>
 
-    <p class="footer-note">First entry logged: ${fmtDate(anchor)} — used as the wheel's starting point.
+    <p class="footer-note">First entry logged: ${fmtDate(earliestEntryDate)}.
       <button id="clear-data-btn">Clear all data</button>
     </p>
   `;
@@ -945,6 +1289,11 @@ function attachHandlers(){
       removeCustomMed(el.getAttribute('data-remove-med'));
     });
   });
+  document.querySelectorAll('[data-severity]').forEach(el => {
+    el.addEventListener('click', () => setSeverity(el.getAttribute('data-severity'), el.getAttribute('data-level')));
+  });
+  const cleanDayBtn = document.getElementById('clean-day-btn');
+  if(cleanDayBtn) cleanDayBtn.addEventListener('click', logCleanDay);
   const dateInput = document.getElementById('date-input');
   if(dateInput) dateInput.addEventListener('change', e => { state.form.date = e.target.value; });
   const otherInput = document.getElementById('other-input');
@@ -967,6 +1316,18 @@ function attachHandlers(){
   });
   const cycleInput = document.getElementById('cycle-input');
   if(cycleInput) cycleInput.addEventListener('change', e => updateCycleLength(e.target.value));
+  const anchorInput = document.getElementById('anchor-input');
+  if(anchorInput) anchorInput.addEventListener('change', e => updateCycleAnchor(e.target.value));
+  const resetAnchorBtn = document.getElementById('reset-anchor-btn');
+  if(resetAnchorBtn) resetAnchorBtn.addEventListener('click', resetCycleAnchor);
+  const historySearch = document.getElementById('history-search');
+  if(historySearch) historySearch.addEventListener('input', e => {
+    state.historyFilter = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    render();
+    const freshInput = document.getElementById('history-search');
+    if(freshInput){ freshInput.focus(); freshInput.setSelectionRange(cursorPos, cursorPos); }
+  });
   const clearBtn = document.getElementById('clear-data-btn');
   if(clearBtn) clearBtn.addEventListener('click', async () => {
     if(confirm('Delete all logged entries? This cannot be undone.')){
