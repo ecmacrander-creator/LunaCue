@@ -82,6 +82,18 @@
     margin-bottom:10px;
     display:block;
   }
+  .tip-block{border-top:1px solid var(--line);padding:10px 0;}
+  .tip-block:first-of-type{border-top:none;}
+  .tip-block summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-size:14px;}
+  .tip-block summary::-webkit-details-marker{display:none;}
+  .tip-block summary::after{content:'+';margin-left:auto;color:var(--ink-soft);font-size:16px;}
+  .tip-block[open] summary::after{content:'\2212';}
+  .tip-block .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .tip-title{font-weight:600;color:var(--ink);}
+  .tip-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);}
+  .tip-personal{font-size:12.5px;color:var(--ink-soft);margin:8px 0 6px;line-height:1.5;}
+  .tip-list{margin:0;padding-left:18px;font-size:13.5px;line-height:1.6;color:var(--ink);}
+  .tip-doc{font-size:12px;color:var(--ink);margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--line);line-height:1.5;}
   .banner{
     font-size:12px;
     color:#8C4A5B;
@@ -950,6 +962,182 @@ function computeCooccurrence(rings){
   return pairCounts;
 }
 
+// --- Lifestyle suggestions library. Matched to symptoms by keywords in the
+// label, so custom symptoms you add (e.g. "Acid reflux") get tips too.
+// Everyday, low-risk habits only. No medication advice. Each entry has a
+// "callDoc" line for signs that mean get checked rather than self-manage.
+const LIFESTYLE_TIPS = [
+  { keys:['reflux','heartburn','acid'], title:'Reflux',
+    tips:['Eat smaller meals instead of a few big ones.',
+          'Stop eating 2–3 hours before lying down or bed.',
+          'Raise the head of your bed 6–8 inches (a wedge or bed risers, not extra pillows).',
+          'Watch for personal triggers: coffee, alcohol, chocolate, mint, citrus, tomato, spicy, fatty or fried food, carbonation.',
+          'Skip tight waistbands after meals.'],
+    callDoc:'Trouble or pain swallowing, vomiting blood, black stools, or unplanned weight loss.' },
+  { keys:['nausea','queasy','vomit'], title:'Nausea',
+    tips:['Eat small amounts often; an empty stomach tends to make nausea worse.',
+          'Lean on bland, dry foods (crackers, toast, rice) on rough days.',
+          'Try ginger: tea, chews, or real-ginger ginger ale.',
+          'Sip fluids between meals rather than with them.',
+          'Stay upright for 30+ minutes after eating; avoid greasy food and strong smells.'],
+    callDoc:'Can’t keep fluids down for a day, signs of dehydration, or vomiting with severe belly pain.' },
+  { keys:['migrain','headache'], title:'Headaches & migraine',
+    tips:['Keep the same sleep and wake time every day, including weekends.',
+          'Don’t skip meals; low blood sugar is a common trigger.',
+          'Drink water steadily through the day.',
+          'Keep caffeine consistent; big day-to-day swings can trigger headaches.',
+          'Note likely triggers on bad days (alcohol, poor sleep, stress, screens) in the notes field.',
+          'If migraines ever come with aura (visual changes, numbness, trouble speaking), tell whoever prescribes your birth control; it matters for estrogen-containing pills.'],
+    callDoc:'A sudden “worst ever” headache, or headache with fever, stiff neck, confusion, weakness, or vision loss: go to the ER.' },
+  { keys:['anxi','stress','overwhelm','panic'], title:'Anxiety',
+    tips:['Slow breathing with a longer exhale (in 4, out 6–8) for a few minutes.',
+          'Daily movement, even a 10–20 minute walk.',
+          'Cut back on caffeine, especially after noon.',
+          'Protect sleep; anxiety and short sleep feed each other.',
+          'Get daylight outside early in the day.'],
+    callDoc:'Anxiety that’s getting in the way of work, sleep, or daily life most days.' },
+  { keys:['irritab','mood','angry','sad','cry'], title:'Mood & irritability',
+    tips:['Eat regularly; long gaps between meals make irritability worse.',
+          'Move daily, ideally outside.',
+          'Limit alcohol and late caffeine, which both hit mood and sleep.',
+          'On your higher-risk days, plan lighter commitments where you can.'],
+    callDoc:'Low mood most days for 2+ weeks, or mood changes that feel out of proportion or new since a medication change.' },
+  { keys:['insomnia','sleep'], title:'Sleep',
+    tips:['Same wake time every day, even after a bad night.',
+          'No caffeine after early afternoon.',
+          'Dim lights and put screens away about an hour before bed.',
+          'Keep the room cool, dark, and quiet.',
+          'If you’re awake 20+ minutes, get up and do something calm until sleepy.',
+          'Get morning daylight to anchor your body clock.'],
+    callDoc:'Poor sleep most nights for a month or more, or loud snoring/gasping at night.' },
+  { keys:['bowel-loose','loose','diarrhea','bowel-frequent','frequent'], title:'Loose or frequent stools',
+    tips:['Rehydrate with fluids that include electrolytes on bad days.',
+          'Favor soluble fiber: oats, bananas, rice, potatoes.',
+          'Limit caffeine, alcohol, greasy food, and sugar-free sweeteners (sorbitol, xylitol).',
+          'Note dairy and other suspected foods on flare days to spot triggers.'],
+    callDoc:'Blood in stool, black stools, fever, waking at night to go, signs of dehydration, or weight loss.' },
+  { keys:['constipat'], title:'Constipation',
+    tips:['Increase fiber gradually (fruit, vegetables, beans, whole grains).',
+          'Drink more water as you add fiber.',
+          'Move daily; walking helps gut motility.',
+          'Give yourself unrushed bathroom time after breakfast.'],
+    callDoc:'Blood in stool, severe pain, or a lasting change in your normal pattern.' },
+  { keys:['gas','bloat'], title:'Gas & bloating',
+    tips:['Eat slowly and chew well.',
+          'Cut back on carbonated drinks, gum, and drinking through straws.',
+          'Take a short walk after meals.',
+          'Track common culprits: beans, onions, garlic, some dairy, sugar-free sweeteners.'],
+    callDoc:'Bloating that is constant, getting worse, or comes with weight loss or appetite changes.' },
+  { keys:['rlq','quadrant','abdom','pelvic','groin'], title:'Lower belly pain',
+    tips:['Use heat (heating pad or warm bath) for mild, crampy pain.',
+          'Log what you ate and bowel changes on pain days to spot a gut link.',
+          'Note the exact spot and whether it’s crampy or steady; it helps your doctor.'],
+    callDoc:'Pain that is steady and worsening, with fever or vomiting, or worse when you move, cough, or walk: get seen the same day.' },
+  { keys:['cramp'], title:'Cramping',
+    tips:['Heat on the belly or lower back.',
+          'Gentle movement or stretching instead of staying still.',
+          'Stay hydrated and go easy on salt and caffeine around flare days.'],
+    callDoc:'Cramping that is severe, new, or keeps getting worse.' },
+  { keys:['fatigue','tired','energy','brain fog'], title:'Fatigue',
+    tips:['Keep sleep and wake times consistent.',
+          'Eat protein with breakfast; don’t skip meals.',
+          'Short walks or daylight breaks beat a second coffee.',
+          'Hydrate steadily through the day.'],
+    callDoc:'Fatigue that lasts weeks despite good sleep; ask about basic labs (iron, thyroid).' },
+];
+
+function tipsForSymptom(symptom){
+  const hay = (symptom.id + ' ' + symptom.label).toLowerCase();
+  return LIFESTYLE_TIPS.find(t => t.keys.some(k => hay.includes(k))) || null;
+}
+
+// Finds the cycle window where a symptom clusters (same logic as the
+// insights cluster note, applied to any symptom).
+function clusterWindow(dayIdxs, cycleLength){
+  if(!dayIdxs || dayIdxs.length < 3) return null;
+  const bucketSize = Math.max(1, Math.round(cycleLength/4));
+  const bc = {};
+  dayIdxs.forEach(d => { const b = Math.floor(d/bucketSize); bc[b] = (bc[b]||0)+1; });
+  const [top, n] = Object.entries(bc).sort((a,b) => b[1]-a[1])[0];
+  if(n / dayIdxs.length < 0.5) return null;
+  const start = Number(top)*bucketSize + 1;
+  return {start, end: Math.min(cycleLength, start + bucketSize - 1)};
+}
+
+// Ranks symptoms by prominence: each occurrence weighted by severity, with
+// the last 30 days counting extra so the list reflects what's bothering you now.
+function computeProminentSymptoms(rings){
+  const sevW = {mild:1, moderate:1.5, severe:2};
+  const recentCutoff = addDays(todayISO(), -30);
+  const score = {}, n = {}, recent = {};
+  for(const e of state.entries){
+    (e.symptoms||[]).forEach(id => {
+      const w = sevW[(e.severity||{})[id]] || 1;
+      const isRecent = e.date >= recentCutoff;
+      score[id] = (score[id]||0) + w * (isRecent ? 1.5 : 1);
+      n[id] = (n[id]||0) + 1;
+      if(isRecent) recent[id] = (recent[id]||0) + 1;
+    });
+  }
+  return rings
+    .filter(r => n[r.id])
+    .map(r => ({symptom:r, score:score[r.id], n:n[r.id], recent:recent[r.id]||0}))
+    .sort((a,b) => b.score - a.score);
+}
+
+function renderSuggestionsCard(rings, symptomDayIdxs, pairCounts, cycleLength){
+  const ranked = computeProminentSymptoms(rings);
+  const picks = [];
+  const usedTitles = new Set();
+  for(const p of ranked){
+    const lib = tipsForSymptom(p.symptom);
+    if(!lib || usedTitles.has(lib.title)) continue;
+    usedTitles.add(lib.title);
+    picks.push({...p, lib});
+    if(picks.length === 3) break;
+  }
+  if(!picks.length){
+    return `<div class="card"><span class="section-label">Things that may help</span>
+      <p style="font-size:13px;color:var(--ink-soft);margin:0;">Once you log a few symptoms, suggestions for your most frequent ones will show up here.</p></div>`;
+  }
+  const labelById = {};
+  rings.forEach(r => labelById[r.id] = r.label);
+
+  const blocks = picks.map(p => {
+    const id = p.symptom.id;
+    const win = clusterWindow(symptomDayIdxs[id], cycleLength);
+    let partner = null, best = 0;
+    Object.entries(pairCounts).forEach(([k, c]) => {
+      const [a, b] = k.split('|');
+      if((a === id || b === id) && c >= 2 && c > best){ best = c; partner = labelById[a === id ? b : a]; }
+    });
+    const personal = [
+      `Logged ${p.n} time${p.n===1?'':'s'}${p.recent ? `, ${p.recent} in the last 30 days` : ''}.`,
+      win ? `Tends to show up around cycle days ${win.start}–${win.end}. Lean on these habits a few days before that window.` : '',
+      partner ? `Often shows up with ${escapeHtml(partner)} (${best} days), so tips for one may help both.` : ''
+    ].filter(Boolean).join(' ');
+    return `
+      <details class="tip-block">
+        <summary>
+          <span class="dot" style="background:${p.symptom.color}"></span>
+          <span class="tip-title">${escapeHtml(p.symptom.label)}</span>
+          <span class="tip-count">${p.n}×</span>
+        </summary>
+        <p class="tip-personal">${personal}</p>
+        <ul class="tip-list">${p.lib.tips.map(t => `<li>${t}</li>`).join('')}</ul>
+        <p class="tip-doc"><strong>Get checked if:</strong> ${p.lib.callDoc}</p>
+      </details>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <span class="section-label">Things that may help</span>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">Your most prominent symptoms, weighted by severity and how recent. Tap one for habits that commonly ease it.</p>
+      ${blocks}
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">General lifestyle guidance, not medical advice. Try one or two changes at a time and keep logging so you can see if they help.</p>
+    </div>`;
+}
+
 function triggerDownload(content, filename, mimeType){
   const blob = new Blob([content], {type: mimeType});
   const url = URL.createObjectURL(blob);
@@ -1483,6 +1671,8 @@ function renderPatterns(){
         These are just counts and patterns from what you've logged — worth bringing up with your doctor, not a diagnosis.
       </p>
     </div>
+
+    ${renderSuggestionsCard(rings, symptomDayIdxs, pairCounts, cycleLength)}
 
     <div class="card">
       <span class="section-label">Symptoms that show up together</span>
