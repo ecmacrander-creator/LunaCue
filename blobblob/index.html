@@ -397,6 +397,10 @@
       <button id="copyLinkBtn">Copy invite link</button>
       <button id="switchSpaceBtn">Switch family</button>
       <button class="show-help" id="showIntroBtn">How it works</button>
+      <button id="backupBtn">Download backup</button>
+      <button id="csvBtn">Download log (CSV)</button>
+      <button id="restoreBtn">Restore</button>
+      <input type="file" id="restoreFile" accept="application/json,.json" style="display:none">
     </div>
   </div>
 
@@ -1756,6 +1760,104 @@ document.getElementById('dismissIntro').addEventListener('click', ()=>{
   try{ localStorage.setItem('blobblob:introDone','1'); }catch(e){}
 });
 document.getElementById('showIntroBtn').addEventListener('click', showIntro);
+
+/* ---------- export / restore ---------- */
+function downloadFile(name, text, type){
+  const blob = new Blob([text], {type: type || 'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+function stamp(){
+  const d = new Date();
+  const p = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
+async function downloadBackup(){
+  setStatus('Building backup...');
+  const payload = {app:'blob-blob', version:1, space:SPACE, exported:new Date().toISOString(), jars:[]};
+  for(const j of jarList){
+    const d = jars[j.id] || await loadJar(j.id);
+    payload.jars.push({
+      id:j.id, name:j.name, size:d.size, meta:d.meta,
+      tasks:d.tasks, milestones:d.milestones, progress:d.progress
+    });
+  }
+  downloadFile(`blob-blob-${SPACE}-${stamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  setStatus('Backup downloaded — keep it somewhere safe', 6000);
+}
+
+async function downloadCsv(){
+  setStatus('Building log...');
+  const rows = [['Jar','Task','Blobs','When','Timestamp']];
+  for(const j of jarList){
+    const d = jars[j.id] || await loadJar(j.id);
+    const byId = {};
+    d.tasks.forEach(t=>{ byId[t.id] = t.label || 'Untitled task'; });
+    let cur = null;
+    const entries = [];
+    d.progress.forEach(p=>{
+      if(p.batch && cur && cur.batch === p.batch){ cur.count++; }
+      else { cur = {batch:p.batch||null, ts:p.ts, taskId:p.taskId, count:1}; entries.push(cur); }
+    });
+    entries.forEach(e=>{
+      rows.push([j.name, byId[e.taskId] || '(deleted task)', e.count,
+                 new Date(e.ts).toLocaleString(), new Date(e.ts).toISOString()]);
+    });
+  }
+  const csv = rows.map(r=>r.map(v=>{
+    const s2 = String(v);
+    return /[",\n]/.test(s2) ? '"' + s2.replace(/"/g,'""') + '"' : s2;
+  }).join(',')).join('\n');
+  downloadFile(`blob-blob-${SPACE}-log-${stamp()}.csv`, csv, 'text/csv');
+  setStatus(`Log downloaded — ${rows.length-1} entries`, 6000);
+}
+
+document.getElementById('backupBtn').addEventListener('click', downloadBackup);
+document.getElementById('csvBtn').addEventListener('click', downloadCsv);
+document.getElementById('restoreBtn').addEventListener('click', ()=>{
+  document.getElementById('restoreFile').click();
+});
+document.getElementById('restoreFile').addEventListener('change', async (e)=>{
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  let data;
+  try{ data = JSON.parse(await file.text()); }
+  catch(err){ setStatus("That file isn't a Blob Blob backup", 6000); return; }
+  if(!data || data.app !== 'blob-blob' || !Array.isArray(data.jars)){
+    setStatus("That file isn't a Blob Blob backup", 6000); return;
+  }
+  const names = data.jars.map(j=>j.name).join(', ');
+  if(!confirm(`Restore ${data.jars.length} jar(s) into "${SPACE}"?\n\n${names}\n\nThis replaces any jar here with the same name.`)) return;
+
+  setStatus('Restoring...');
+  const list = [...jarList];
+  for(const src of data.jars){
+    let entry = list.find(j=>j.id === src.id) || list.find(j=>j.name === src.name);
+    if(!entry){ entry = {id:src.id || ('jar'+Date.now()+Math.floor(Math.random()*999)), name:src.name}; list.push(entry); }
+    entry.name = src.name;
+    const d = blankJar();
+    d.size = clampSize(src.size || DEFAULT_SIZE);
+    d.meta = src.meta || d.meta;
+    d.tasks = Array.isArray(src.tasks) ? src.tasks : [];
+    d.milestones = Array.isArray(src.milestones) ? src.milestones : [];
+    d.progress = Array.isArray(src.progress) ? src.progress : [];
+    jars[entry.id] = d;
+    await Promise.all([
+      sSet(entry.id+':size', d.size), sSet(entry.id+':meta', d.meta),
+      sSet(entry.id+':tasks', d.tasks), sSet(entry.id+':milestones', d.milestones),
+      sSet(entry.id+':progress', d.progress)
+    ]);
+  }
+  jarList = list;
+  await sSet('jarList', jarList);
+  goHome();
+  setStatus(`Restored ${data.jars.length} jar(s)`, 6000);
+});
 
 async function shareInvite(){
   const link = inviteLink();
