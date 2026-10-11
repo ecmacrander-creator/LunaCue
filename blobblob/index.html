@@ -61,6 +61,44 @@
     cursor:pointer;text-decoration:underline;padding:0;
   }
   .space-foot button:hover{color:var(--ink);}
+
+  /* ---------- first-run overview ---------- */
+  .intro{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:20px 20px 16px;margin-bottom:22px;
+  }
+  .intro h2{margin:0 0 4px 0;font-size:1.1rem;font-weight:600;}
+  .intro .tag{font-size:0.86rem;color:#777;margin-bottom:16px;}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px;}
+  .step{display:flex;gap:10px;align-items:flex-start;}
+  .step .num{
+    flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--ink);color:#fff;
+    font-size:0.76rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;
+  }
+  .step .body{font-size:0.86rem;line-height:1.45;color:#555;}
+  .step .body b{color:var(--ink);display:block;font-size:0.9rem;margin-bottom:2px;}
+  .intro-foot{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+    border-top:1px solid var(--line);padding-top:12px;
+  }
+  .intro-foot button{
+    border:1px solid var(--line);background:var(--card);border-radius:14px;padding:7px 14px;
+    font-size:0.84rem;cursor:pointer;color:#555;font-family:inherit;
+  }
+  .intro-foot button:hover{background:#f0eee8;}
+  .intro-foot .ghost{border:none;background:none;color:#999;text-decoration:underline;padding:0 4px;}
+  .intro-foot .ghost:hover{color:#666;background:none;}
+  .intro .detail{
+    font-size:0.84rem;line-height:1.5;color:#666;background:var(--paper);
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;
+  }
+  .intro .detail b{color:var(--ink);}
+  .intro .detail + .detail{margin-top:8px;}
+  .show-help{
+    border:none;background:none;color:#999;font-family:inherit;font-size:0.8rem;
+    cursor:pointer;text-decoration:underline;padding:0;
+  }
+  .show-help:hover{color:var(--ink);}
   .size-row{
     margin-top:14px;display:flex;gap:8px;align-items:center;justify-content:center;
     flex-wrap:wrap;font-size:0.88rem;color:#555;
@@ -328,11 +366,37 @@
       Open this file in a text editor and paste your Supabase project URL and anon key into
       <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script, then re-upload it.
     </div>
+    <div class="intro hidden" id="intro">
+      <h2>How it works</h2>
+      <div class="tag">Every jar holds a set number of blobs. Do something good, colour a blob in. Fill the jar, collect the reward.</div>
+      <div class="steps">
+        <div class="step"><div class="num">1</div><div class="body"><b>Open a jar</b>Each person gets their own. Tap a jar below, or start a new one.</div></div>
+        <div class="step"><div class="num">2</div><div class="body"><b>Add your tasks</b>Whatever counts — reading, chores, homework. Hard ones can be worth several blobs.</div></div>
+        <div class="step"><div class="num">3</div><div class="body"><b>Tap Done</b>A blob fills in from the bottom and the time gets logged.</div></div>
+        <div class="step"><div class="num">4</div><div class="body"><b>Set the rewards</b>Pick blob counts along the way and what each one earns.</div></div>
+      </div>
+      <div class="intro-foot">
+        <button id="helpPhoneBtn">Save to my phone</button>
+        <button id="helpShareBtn">Share with my partner</button>
+        <button class="ghost" id="dismissIntro">Hide this</button>
+      </div>
+      <div class="detail hidden" id="helpPhone"></div>
+      <div class="detail hidden" id="helpShare">
+        <b>Anyone using your family code sees the same jars.</b> Send them the link below — it has your code built in, so they land straight on these jars with nothing to type. Both of you can add blobs from your own phones and they show up on the other side within a few seconds.
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="shareLinkBtn" style="border:none;background:var(--ink);color:#fff;border-radius:14px;padding:8px 14px;font-size:0.84rem;cursor:pointer;font-family:inherit;font-weight:600;">Copy invite link</button>
+          <button id="textLinkBtn" style="border:1px solid var(--line);background:var(--card);border-radius:14px;padding:8px 14px;font-size:0.84rem;cursor:pointer;color:#555;font-family:inherit;">Text it</button>
+        </div>
+        <div style="margin-top:10px;font-size:0.8rem;color:#999;">Only share this with people who should be able to change your jars. Anyone with the link gets in.</div>
+      </div>
+    </div>
+
     <div class="jar-grid" id="jarGrid"></div>
     <div class="space-foot">
       <span>Family code: <b id="spaceLabel"></b></span>
       <button id="copyLinkBtn">Copy invite link</button>
       <button id="switchSpaceBtn">Switch family</button>
+      <button class="show-help" id="showIntroBtn">How it works</button>
     </div>
   </div>
 
@@ -1617,6 +1681,14 @@ async function enterSpace(code){
   document.getElementById('spaceLabel').textContent = code;
   goHome();
 
+  // first visit for this person: show the walkthrough
+  const barelyStarted = jarIds().every(id=>{
+    const d = jars[id] || blankJar();
+    return d.progress.length === 0 && d.tasks.length === 0;
+  });
+  if(!introDismissed() && barelyStarted) showIntro();
+  else document.getElementById('intro').classList.add('hidden');
+
   if(CLOUD_ON){
     setSyncBadge(cloudHealthy ? 'synced' : 'offline — changes saved on this device',
                  cloudHealthy ? 'ok' : 'warn');
@@ -1642,15 +1714,70 @@ document.getElementById('switchSpaceBtn').addEventListener('click', ()=>{
   showGate(SPACE);
 });
 
-document.getElementById('copyLinkBtn').addEventListener('click', async ()=>{
-  const link = location.origin + location.pathname + '#' + SPACE;
+/* ---------- first-run overview ---------- */
+function introDismissed(){
+  try{ return localStorage.getItem('blobblob:introDone') === '1'; }catch(e){ return false; }
+}
+function inviteLink(){
+  return location.origin + location.pathname + '#' + SPACE;
+}
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function installedAsApp(){
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+function phoneHelpText(){
+  if(installedAsApp()) return '<b>You are already running it as an app.</b> Nothing else to do here.';
+  if(isIOS()) return '<b>On iPhone or iPad:</b> tap the Share button at the bottom of Safari (the square with the arrow), scroll down the list, and tap <b>Add to Home Screen</b>. It has to be Safari — Chrome will not offer it. The jar icon lands on your home screen and opens full screen like a normal app.';
+  return '<b>On Android:</b> tap the ⋮ menu in Chrome, then <b>Install app</b> or <b>Add to Home screen</b>. On a computer, look for the install icon at the right end of the address bar. It will open in its own window from then on.';
+}
+
+function showIntro(){
+  const el = document.getElementById('intro');
+  el.classList.remove('hidden');
+  el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+document.getElementById('helpPhoneBtn').addEventListener('click', ()=>{
+  const d = document.getElementById('helpPhone');
+  document.getElementById('helpShare').classList.add('hidden');
+  d.innerHTML = phoneHelpText();
+  d.classList.toggle('hidden');
+});
+document.getElementById('helpShareBtn').addEventListener('click', ()=>{
+  document.getElementById('helpPhone').classList.add('hidden');
+  document.getElementById('helpShare').classList.toggle('hidden');
+});
+document.getElementById('dismissIntro').addEventListener('click', ()=>{
+  document.getElementById('intro').classList.add('hidden');
+  try{ localStorage.setItem('blobblob:introDone','1'); }catch(e){}
+});
+document.getElementById('showIntroBtn').addEventListener('click', showIntro);
+
+async function shareInvite(){
+  const link = inviteLink();
+  const msg = `Come share our jars on Blob Blob — tap this and you are in: ${link}`;
+  if(navigator.share){
+    try{ await navigator.share({title:'Blob Blob', text:'Come share our jars on Blob Blob', url:link}); return; }
+    catch(e){ if(e && e.name === 'AbortError') return; }
+  }
   try{
     await navigator.clipboard.writeText(link);
-    setStatus('Invite link copied — anyone who opens it joins these jars', 6000);
+    setStatus('Invite link copied — paste it to your partner', 6000);
   }catch(e){
-    setStatus(link, 12000);
+    prompt('Copy this link and send it:', link);
   }
+}
+document.getElementById('shareLinkBtn').addEventListener('click', shareInvite);
+document.getElementById('textLinkBtn').addEventListener('click', ()=>{
+  const link = inviteLink();
+  location.href = 'sms:?&body=' + encodeURIComponent('Come share our jars on Blob Blob — tap this and you are in: ' + link);
 });
+
+document.getElementById('copyLinkBtn').addEventListener('click', ()=>shareInvite());
 
 /* ============================================================
    Boot
