@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blob Blob — Connection Check</title>
+<style>
+  :root{--ink:#2b2b2b;--paper:#fbfaf7;--line:#d8d3c8;--card:#fff;--green:#3f7a3f;--bad:#9a2b2b;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);padding:20px;
+       font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif;}
+  .wrap{max-width:620px;margin:0 auto;}
+  h1{font-weight:300;font-size:1.9rem;margin:0 0 4px;letter-spacing:0.5px;}
+  .sub{color:#777;font-size:0.9rem;margin-bottom:18px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;}
+  .t{font-weight:600;margin-bottom:6px;}
+  .pass{color:var(--green);font-weight:600;}
+  .fail{color:var(--bad);font-weight:600;}
+  pre{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px;
+      font-size:0.74rem;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:8px 0 0;}
+  .fix{background:#fff8e6;border:1px solid #e6d5a8;border-radius:12px;padding:14px;
+       font-size:0.88rem;line-height:1.5;color:#5c4a1f;}
+  .fix b{color:#3d3109;}
+  button{width:100%;border:none;background:var(--ink);color:#fff;border-radius:12px;padding:13px;
+         font-size:1rem;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>connection check</h1>
+  <div class="sub">Talks to Supabase directly and reports exactly what comes back.</div>
+  <button id="run">Run the check again</button>
+  <div id="out"></div>
+</div>
+<script>
+const SUPABASE_URL = "https://vmxgrkhxykjeibrwdgkt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZteGdya2h4eWtqZWlicndkZ2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MDc4MzYsImV4cCI6MjEwNDI4MzgzNn0.plP4eMzgfyubtXyYq_K0RuOAdO8E_2MfeuMO3PjtwDk";
+const TABLE = "bitbybit";
+const out = document.getElementById('out');
+
+function card(title, okFlag, detail){
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = '<div class="t">' + title + ' — <span class="' + (okFlag?'pass':'fail') + '">' +
+    (okFlag ? 'OK' : 'FAILED') + '</span></div>' +
+    (detail ? '<pre>' + detail.replace(/[<>&]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</pre>' : '');
+  out.appendChild(d);
+  return okFlag;
+}
+function advise(html){
+  const d = document.createElement('div');
+  d.className = 'card fix';
+  d.innerHTML = html;
+  out.appendChild(d);
+}
+
+const H = {
+  'apikey': SUPABASE_ANON_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+  'Content-Type': 'application/json'
+};
+
+async function run(){
+  out.innerHTML = '';
+  let status = {};
+
+  // 1. can we reach the project at all
+  try{
+    const r = await fetch(SUPABASE_URL + '/rest/v1/', {headers:H});
+    status.reach = r.status;
+    card('1. Reaching the project', r.status < 500, 'HTTP ' + r.status);
+  }catch(e){
+    card('1. Reaching the project', false, String(e));
+    advise('<b>The request never left the phone.</b> That is a network or DNS problem, not a Supabase setting. Check you are online and try again.');
+    return;
+  }
+
+  // 2. read from the table
+  let readBody = '';
+  try{
+    const r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE + '?select=key&limit=1', {headers:H});
+    readBody = await r.text();
+    status.read = r.status;
+    card('2. Reading the table', r.ok, 'HTTP ' + r.status + '\n' + readBody);
+  }catch(e){
+    card('2. Reading the table', false, String(e));
+    status.read = 0;
+  }
+
+  // 3. write to the table
+  let writeBody = '';
+  try{
+    const r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE, {
+      method:'POST',
+      headers: Object.assign({}, H, {'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify([{key:'__check', value:'hello ' + new Date().toISOString()}])
+    });
+    writeBody = await r.text();
+    status.write = r.status;
+    card('3. Writing to the table', r.ok, 'HTTP ' + r.status + (writeBody ? '\n' + writeBody : '\n(empty response, which is normal on success)'));
+  }catch(e){
+    card('3. Writing to the table', false, String(e));
+    status.write = 0;
+  }
+
+  // 4. read back what we just wrote
+  try{
+    const r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE + '?key=eq.__check&select=value', {headers:H});
+    const b = await r.text();
+    const got = r.ok && b.indexOf('hello') !== -1;
+    card('4. Reading it back', got, 'HTTP ' + r.status + '\n' + b);
+    status.roundtrip = got;
+  }catch(e){
+    card('4. Reading it back', false, String(e));
+  }
+
+  // diagnosis
+  const all = (status.read === 200) && (status.write === 201 || status.write === 200 || status.write === 204) && status.roundtrip;
+  if(all){
+    advise('<b>Everything works.</b> Sync should be live — reopen the app and the badge should go green. If it still says offline, fully close the app and open it again.');
+    return;
+  }
+  const codes = [status.read, status.write].filter(Boolean);
+  if(codes.indexOf(404) !== -1){
+    advise('<b>404 means the table is not there.</b> Either the SQL ran in a different project, or the table has another name. In Supabase open <b>Table Editor</b> and check there is a table called <b>bitbybit</b> in the <b>public</b> schema. If it is missing, run the setup SQL again in this project.');
+  } else if(codes.indexOf(401) !== -1 || codes.indexOf(403) !== -1){
+    advise('<b>401 or 403 means permission, not plumbing.</b> The table exists but the anon role is being turned away. In Supabase open <b>Authentication → Policies</b>, find <b>bitbybit</b>, and confirm three policies exist for SELECT, INSERT and UPDATE, each one applying to <b>public</b> or <b>anon</b>. Re-running the setup SQL creates them.');
+  } else if(codes.indexOf(400) !== -1){
+    advise('<b>400 means the table columns do not match.</b> It needs exactly <b>key</b> (text, primary key), <b>value</b> (text) and <b>updated_at</b>. Check the column names in Table Editor.');
+  } else {
+    advise('<b>Unexpected result.</b> Screenshot this whole page and send it over.');
+  }
+}
+
+document.getElementById('run').addEventListener('click', run);
+run();
+</script>
+</body>
+</html>
