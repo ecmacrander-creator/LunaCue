@@ -1,0 +1,15 @@
+{
+  "name": "twind",
+  "short_name": "twind",
+  "description": "One deeper conversation a day.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#F7EFEA",
+  "theme_color": "#F7EFEA",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
