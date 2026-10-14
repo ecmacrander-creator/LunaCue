@@ -320,6 +320,7 @@
         <div class="code" aria-label="Code ${esc(S.couple?.invite_code.split("").join(" "))}">${esc(S.couple?.invite_code)}</div>
         <button class="btn" type="button" data-action="share-code" style="max-width: 280px">Share the code</button>
         <p class="sub">This screen updates on its own once they join.</p>
+        <button class="btn link" type="button" data-action="leave">Have a code from your spouse instead?</button>
       </div></main>`;
   }
 
@@ -657,6 +658,14 @@
         if (navigator.share) await navigator.share({ title: "twind", text, url: location.href.split("#")[0] });
         else { await navigator.clipboard.writeText(`${text} ${location.href.split("#")[0]}`); toast("Copied. Paste it in a text to them."); }
       } catch { /* share sheet closed */ }
+    },
+    leave: async () => {
+      if (!confirm("Drop this code and enter your spouse's code instead?")) return;
+      const { error } = await S.sb.rpc("leave_couple");
+      if (error) { toast(error.message); return; }
+      if (channel) { S.sb.removeChannel(channel); channel = null; }
+      Object.assign(S, { me: null, partner: null, members: [], couple: null, today: null, answers: [], pairMode: "join" });
+      render();
     },
     signout: async () => {
       if (channel) { S.sb.removeChannel(channel); channel = null; }

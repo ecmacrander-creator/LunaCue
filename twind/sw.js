@@ -1,5 +1,5 @@
 // twind service worker: offline shell + push notifications.
-const CACHE = "twind-v1";
+const CACHE = "twind-v2";
 const ASSETS = ["./", "index.html", "styles.css", "app.js", "config.js", "questions.json", "mark.svg", "icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -19,7 +19,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== self.location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: "no-cache" })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));
