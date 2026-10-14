@@ -398,10 +398,12 @@
           ${S.editing ? '<button class="btn link" type="button" data-action="cancel-edit">Cancel</button>' : ""}
         </form>`;
     } else if (stage === "waiting") {
+      const recently = !!d.last_nudge_at && Date.now() - new Date(d.last_nudge_at).getTime() < 2 * 3600e3;
       body = `<div class="grow">
           ${ICON.lock}
           <h1>Your answer is in</h1>
           <p class="sub">You'll both see each other's answers as soon as ${partner} answers.</p>
+          <button class="btn ghost" type="button" data-action="nudge" style="max-width: 280px" ${recently || S.busy ? "disabled" : ""}>${recently ? `Nudged ${partner}` : `Nudge ${partner}`}</button>
           <button class="btn link" type="button" data-action="edit">Edit my answer</button>
         </div>${pushNudge()}`;
     } else if (stage === "reveal") {
@@ -658,6 +660,23 @@
         if (navigator.share) await navigator.share({ title: "twind", text, url: location.href.split("#")[0] });
         else { await navigator.clipboard.writeText(`${text} ${location.href.split("#")[0]}`); toast("Copied. Paste it in a text to them."); }
       } catch { /* share sheet closed */ }
+    },
+    nudge: async () => {
+      if (S.busy) return;
+      S.busy = true; render();
+      let res = null;
+      try {
+        const r = await S.sb.functions.invoke("twind-notify", { body: { event: "nudge" } });
+        if (!r.error) res = r.data;
+      } catch { /* handled below */ }
+      S.busy = false;
+      const p = S.partner.display_name;
+      if (!res) toast("Couldn't send the nudge. Notifications may not be set up yet.");
+      else if (res.sent > 0) { S.today.last_nudge_at = new Date().toISOString(); toast(`Nudge sent to ${p}.`); }
+      else if (res.reason === "too-soon") toast(`You nudged ${p} recently. Try again in about ${res.wait_minutes} minutes.`);
+      else if (res.reason === "no-push") toast(`${p} hasn't turned on notifications yet, so it couldn't reach their phone.`);
+      else { toast(`${p} doesn't need a nudge right now.`); await loadToday(); }
+      render();
     },
     leave: async () => {
       if (!confirm("Drop this code and enter your spouse's code instead?")) return;

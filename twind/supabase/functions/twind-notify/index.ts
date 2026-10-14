@@ -19,6 +19,8 @@ webpush.setVapidDetails(
   Deno.env.get("VAPID_PRIVATE_KEY")!,
 );
 
+const NUDGE_GAP_MIN = 120; // at most one nudge every 2 hours
+
 const LABELS: Record<string, string> = {
   faith: "Faith", us: "Us", future: "Future", reflection: "Reflection",
   fun: "Fun", intimacy: "Intimacy", revisit: "Revisit",
@@ -123,6 +125,24 @@ Deno.serve(async (req) => {
     sent = await sendTo([partner.user_id], both
       ? { title: "Your answers are revealed", body: "You both answered. Time to talk.", tag: "today" }
       : { title: `${me.display_name} answered today's question`, body: "Your turn. You'll see each other's answers once you both answer.", tag: "today" });
+  } else if (body.event === "nudge") {
+    const { data: couple } = await admin.from("couples").select("tz").eq("id", me.couple_id).maybeSingle();
+    const answered = day.answered ?? [];
+    const isToday = !!couple && day.day === localParts(couple.tz).date;
+    if (!isToday || !day.locked || !answered.includes(user.id) || answered.includes(partner.user_id)) {
+      return json({ sent: 0, reason: "not-needed" });
+    }
+    const last = day.last_nudge_at ? new Date(day.last_nudge_at).getTime() : 0;
+    const wait = NUDGE_GAP_MIN - Math.floor((Date.now() - last) / 60000);
+    if (wait > 0) return json({ sent: 0, reason: "too-soon", wait_minutes: wait });
+    sent = await sendTo([partner.user_id], {
+      title: `${me.display_name} is waiting on your answer`,
+      body: day.question,
+      tag: "nudge",
+    });
+    if (sent === 0) return json({ sent: 0, reason: "no-push" });
+    await admin.from("days").update({ last_nudge_at: new Date().toISOString() })
+      .eq("couple_id", me.couple_id).eq("day", day.day);
   }
   return json({ sent });
 });

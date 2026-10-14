@@ -34,6 +34,7 @@ create table public.days (
   answered uuid[] not null default '{}',               -- who has answered (not what they said)
   talk_prompt text,
   talked_at timestamptz,
+  last_nudge_at timestamptz,
   created_at timestamptz not null default now(),
   primary key (couple_id, day)
 );
