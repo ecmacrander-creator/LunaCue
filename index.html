@@ -579,10 +579,44 @@ function isSymptomFree(e){
 function blankForm(){
   return { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', otherDailyMeds: '', notes: '', severity: {}, painLocation: {}, medTiming: {}, medTimes: {}, sleepHours: '', sleepQuality: '', noSymptoms: false };
 }
+// Accepts "5h 6m", "5 hrs 6 mins", "5:06", "306m", or plain hours "5.1".
+// Returns decimal hours (2 places) or null.
 function parseSleepHours(v){
   if(v === '' || v === null || v === undefined) return null;
-  const n = parseFloat(v);
-  return (isNaN(n) || n < 0 || n > 24) ? null : n;
+  const t = String(v).trim().toLowerCase();
+  if(!t) return null;
+  let mins = null, m;
+  if((m = t.match(/^(\d{1,2}):(\d{1,2})$/))) mins = (+m[1])*60 + (+m[2]);
+  else if((m = t.match(/^(\d+)\s*(m|min|mins|minutes?)$/))) mins = +m[1];
+  else if((m = t.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?)?\s*(?:(\d+)\s*(m|min|mins|minutes?)?)?$/))){
+    mins = parseFloat(m[1])*60 + (m[3] ? +m[3] : 0);
+  }
+  if(mins === null || isNaN(mins) || mins < 0 || mins > 24*60) return null;
+  return Math.round(mins/60*100)/100;
+}
+function fmtSleep(hours){
+  if(hours === null || hours === undefined || hours === '') return '';
+  const total = Math.round(Number(hours)*60);
+  const h = Math.floor(total/60), mm = total % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
+}
+// Sleep handed over by the Apple Health shortcut in the link
+// (?sleepmin=306). Prefills today's form only; never saves on its own.
+function applySleepFromLink(){
+  try{
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('sleepmin');
+    if(raw === null) return;
+    const mins = parseInt(raw, 10);
+    if(!isNaN(mins) && mins > 0 && mins <= 24*60){
+      state.form.date = todayISO();
+      state.form.sleepHours = fmtSleep(mins/60);
+      state.sleepFromHealth = true;
+    }
+    params.delete('sleepmin');
+    const q = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+  }catch(e){ console.error(e); }
 }
 function fmtTime(hhmm){
   if(!hhmm) return '';
@@ -764,6 +798,7 @@ function loadData(){
     console.error('Storage unavailable:', e);
   }
   state.loaded = true;
+  applySleepFromLink();
   render();
 }
 
@@ -900,7 +935,7 @@ function editEntry(date){
     painLocation: JSON.parse(JSON.stringify(entry.painLocation || {})),
     medTiming: {...(entry.medTiming || {})},
     medTimes: {...(entry.medTimes || {})},
-    sleepHours: (entry.sleepHours === null || entry.sleepHours === undefined) ? '' : String(entry.sleepHours),
+    sleepHours: fmtSleep(entry.sleepHours),
     sleepQuality: entry.sleepQuality || '',
     noSymptoms: isSymptomFree(entry)
   };
@@ -984,6 +1019,7 @@ async function saveEntry(){
 
   const ok = await saveData();
   state.editing = null;
+  state.sleepFromHealth = false;
   state.form = blankForm();
   if(ok){
     state.justSaved = true;
@@ -1296,7 +1332,7 @@ function exportCSV(){
   const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = s.label);
   const medMap = {}; allMeds().forEach(m => medMap[m.id] = m.label);
   const dailyMap = {}; allDailyMeds().forEach(m => dailyMap[m.id] = m.label);
-  const rows = [['Date','No symptoms','Symptoms','Severity','Pain location','Daily meds','Meds taken','Med times','Sleep hours (previous night)','Sleep quality','Notes']];
+  const rows = [['Date','No symptoms','Symptoms','Severity','Pain location','Daily meds','Meds taken','Med times','Sleep (previous night)','Sleep hours (decimal)','Sleep quality','Notes']];
   const sorted = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
   for(const e of sorted){
     const symptomsStr = (e.symptoms||[]).map(id => symptomMap[id] || id).join('; ');
@@ -1314,6 +1350,7 @@ function exportCSV(){
       dailyStr,
       medsStr,
       medTimesStr,
+      fmtSleep(e.sleepHours),
       (e.sleepHours === null || e.sleepHours === undefined) ? '' : e.sleepHours,
       e.sleepQuality || '',
       (e.notes||'').replace(/\n/g,' ')
@@ -1458,7 +1495,7 @@ function renderLog(){
     <div class="severity-list">
       <div class="severity-row">
         <span class="severity-row-label">Hours slept</span>
-        <input type="number" class="sleep-hours" id="sleep-hours-input" inputmode="decimal" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value="${escapeHtml(f.sleepHours)}">
+        <input type="text" class="sleep-hours" id="sleep-hours-input" autocomplete="off" placeholder="e.g. 5h 6m" value="${escapeHtml(f.sleepHours)}">
       </div>
       <div class="severity-row">
         <span class="severity-row-label">Quality</span>
@@ -1485,6 +1522,9 @@ function renderLog(){
   ` : '';
 
   const daysSince = daysSinceLastLog();
+  const healthBanner = (state.sleepFromHealth && !state.editing) ? `
+    <div class="banner nudge">Sleep filled in from Apple Health. Check it, then save.</div>
+  ` : '';
   const reminderBanner = (!state.editing && daysSince !== null && daysSince >= 2) ? `
     <div class="banner nudge">
       Last logged ${daysSince} days ago — log today when you get a chance.
@@ -1501,6 +1541,7 @@ function renderLog(){
   return `
     ${renderStorageBanner()}
     ${editingBanner}
+    ${healthBanner}
     ${reminderBanner}
     ${recurrenceBanner}
     <div class="card">
@@ -1643,7 +1684,7 @@ function renderHistory(){
     });
     if(e.sleepHours !== undefined && e.sleepHours !== null || e.sleepQuality){
       const parts = [];
-      if(e.sleepHours !== undefined && e.sleepHours !== null) parts.push(`${e.sleepHours} h`);
+      if(e.sleepHours !== undefined && e.sleepHours !== null) parts.push(fmtSleep(e.sleepHours));
       if(e.sleepQuality) parts.push(e.sleepQuality);
       metaBits.push(`<b>Sleep:</b> ${parts.join(', ')}`);
     }
