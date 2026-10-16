@@ -602,6 +602,16 @@ function fmtSleep(hours){
 }
 // Sleep handed over by the Apple Health shortcut in the link
 // (?sleepmin=306). Prefills today's form only; never saves on its own.
+// Reads sleep copied by the Apple Health shortcut (e.g. "5h 6m" or "306m").
+async function pasteSleep(){
+  let text = '';
+  try{ text = await navigator.clipboard.readText(); }
+  catch(e){ alert("Couldn't read the clipboard. Long-press the Hours box and tap Paste instead."); return; }
+  const hours = parseSleepHours(text);
+  if(hours === null){ alert(`Clipboard doesn't look like a sleep time: "${String(text).slice(0,30)}"`); return; }
+  state.form.sleepHours = fmtSleep(hours);
+  render();
+}
 function applySleepFromLink(){
   try{
     const params = new URLSearchParams(window.location.search);
@@ -1495,7 +1505,10 @@ function renderLog(){
     <div class="severity-list">
       <div class="severity-row">
         <span class="severity-row-label">Hours slept</span>
-        <input type="text" class="sleep-hours" id="sleep-hours-input" autocomplete="off" placeholder="e.g. 5h 6m" value="${escapeHtml(f.sleepHours)}">
+        <div style="display:flex;gap:6px;align-items:center;flex:none;">
+          <button type="button" class="sev-btn" id="paste-sleep-btn">Paste</button>
+          <input type="text" class="sleep-hours" id="sleep-hours-input" autocomplete="off" placeholder="e.g. 5h 6m" value="${escapeHtml(f.sleepHours)}">
+        </div>
       </div>
       <div class="severity-row">
         <span class="severity-row-label">Quality</span>
@@ -2044,6 +2057,8 @@ function attachHandlers(){
   document.querySelectorAll('[data-remove-daily]').forEach(el => {
     el.addEventListener('click', (ev) => { ev.stopPropagation(); removeCustomDailyMed(el.getAttribute('data-remove-daily')); });
   });
+  const pasteSleepBtn = document.getElementById('paste-sleep-btn');
+  if(pasteSleepBtn) pasteSleepBtn.addEventListener('click', pasteSleep);
   const sleepHoursInput = document.getElementById('sleep-hours-input');
   if(sleepHoursInput) sleepHoursInput.addEventListener('input', e => { state.form.sleepHours = e.target.value; });
   const otherDailyInput = document.getElementById('other-daily-meds-input');
