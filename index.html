@@ -329,6 +329,20 @@
     border-color:var(--plum);
     color:#fff;
   }
+  .sev-btn.missed.active{background:#8C4A5B;border-color:#8C4A5B;}
+  .sev-btn.sage.active{background:var(--sage);border-color:var(--sage);}
+  .loc-block{display:flex;flex-direction:column;gap:6px;padding:6px 0 2px 10px;border-left:2px solid var(--line);margin-left:2px;}
+  .loc-btns{display:flex;flex-wrap:wrap;gap:6px;}
+  .loc-btns .sev-btn{text-transform:none;}
+  .sleep-hours{width:90px !important;flex:none;text-align:center;}
+  .time-input{width:130px !important;flex:none;}
+  .no-sym-toggle{margin-bottom:10px;}
+  .no-sym-toggle.active{background:var(--sage);border-color:var(--sage);}
+  .entry-meta{font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.5;}
+  .entry-meta b{font-weight:600;color:var(--ink);}
+  details.add-daily{margin-top:8px;}
+  details.add-daily summary{font-size:12px;color:var(--ink-soft);cursor:pointer;}
+  details.add-daily input{margin-top:6px;}
   .sev-dot{
     font-size:7px;
     letter-spacing:-1px;
@@ -535,6 +549,54 @@ function categoryFor(symptom){
 const SEVERITY_LEVELS = ['mild', 'moderate', 'severe'];
 const SEVERITY_DOTS = {mild: '●', moderate: '●●', severe: '●●●'};
 
+// Daily meds get a quick timing answer instead of a taken/not-taken chip.
+// Left blank unless you tap one — blank never means taken or missed.
+const BASE_DAILY_MEDS = [{id:'yaz', label:'Yaz'}];
+const DAILY_TIMING = [
+  {id:'normal', label:'Normal', long:'Normal (morning)'},
+  {id:'midday', label:'Midday', long:'Midday'},
+  {id:'night', label:'Night', long:'Night'},
+  {id:'missed', label:'Missed', long:'Missed'}
+];
+const PAIN_LOCATIONS = [
+  {id:'upper', label:'Upper abdomen'},
+  {id:'lower', label:'Lower abdomen/pelvis'},
+  {id:'left', label:'Left'},
+  {id:'center', label:'Center'},
+  {id:'right', label:'Right'}
+];
+const SLEEP_QUALITY = ['good', 'fair', 'poor'];
+
+// Location choices only show for cramps / abdominal pain symptoms.
+function needsPainLocation(s){
+  return /cramp|abdom|stomach ?(pain|ache)|belly|pelvic pain/i.test(s.label);
+}
+// Only an explicit "No symptoms" tap counts as symptom-free. Older entries
+// saved with the previous "clean day" button carry clean:true.
+function isSymptomFree(e){
+  return !!e && (e.noSymptoms === true || e.clean === true) && (e.symptoms||[]).length === 0;
+}
+function blankForm(){
+  return { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', otherDailyMeds: '', notes: '', severity: {}, painLocation: {}, medTiming: {}, medTimes: {}, sleepHours: '', sleepQuality: '', noSymptoms: false };
+}
+function parseSleepHours(v){
+  if(v === '' || v === null || v === undefined) return null;
+  const n = parseFloat(v);
+  return (isNaN(n) || n < 0 || n > 24) ? null : n;
+}
+function fmtTime(hhmm){
+  if(!hhmm) return '';
+  const [h,m] = hhmm.split(':').map(Number);
+  return new Date(2000,0,1,h,m).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
+}
+function timingLabel(val){
+  const t = DAILY_TIMING.find(x => x.id === val);
+  return t ? t.long : '';
+}
+function painLabels(ids){
+  return PAIN_LOCATIONS.filter(l => (ids||[]).includes(l.id)).map(l => l.label);
+}
+
 let storageAvailable = true;
 let state = {
   entries: [],
@@ -542,6 +604,7 @@ let state = {
   cycleAnchor: null, // manually-set "day 1" date; null = default to earliest entry
   customSymptoms: [],
   customMeds: [],
+  customDailyMeds: [],
   loaded: false,
   view: 'log',
   historyFilter: '',
@@ -550,7 +613,7 @@ let state = {
   historySort: 'date', // 'date' or 'cycleDay'
   editing: null, // date string of the entry currently being edited, or null
   justSaved: false, // briefly true right after a successful save, to show a checkmark
-  form: { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} }
+  form: blankForm()
 };
 
 // The date cycle day 1 counts from — a manual override if set, otherwise
@@ -574,6 +637,16 @@ function allSymptoms(){
 }
 function allMeds(){
   return BASE_MEDS.concat(state.customMeds);
+}
+function allDailyMeds(){
+  return BASE_DAILY_MEDS.concat(state.customDailyMeds);
+}
+// Relief-med chips, minus anything that's now tracked as a daily med (so a
+// custom "Yaz" chip you may have added earlier doesn't show up twice; past
+// entries that used it are left exactly as they were).
+function reliefMedChoices(){
+  const dailyIds = new Set(allDailyMeds().map(m => m.id));
+  return allMeds().filter(m => !dailyIds.has(m.id));
 }
 function todayISO(){
   const d = new Date();
@@ -684,6 +757,7 @@ function loadData(){
       state.cycleAnchor = parsed.cycleAnchor || null;
       state.customSymptoms = parsed.customSymptoms || [];
       state.customMeds = parsed.customMeds || [];
+      state.customDailyMeds = parsed.customDailyMeds || [];
     }
   }catch(e){
     storageAvailable = false;
@@ -700,7 +774,8 @@ function saveData(){
       cycleLength: state.cycleLength,
       cycleAnchor: state.cycleAnchor,
       customSymptoms: state.customSymptoms,
-      customMeds: state.customMeds
+      customMeds: state.customMeds,
+      customDailyMeds: state.customDailyMeds
     }));
     storageAvailable = true;
     return true;
@@ -719,8 +794,10 @@ function toggleSymptom(id){
   if(state.form.symptoms.has(id)){
     state.form.symptoms.delete(id);
     delete state.form.severity[id];
+    delete state.form.painLocation[id];
   } else {
     state.form.symptoms.add(id);
+    state.form.noSymptoms = false;
   }
   render();
 }
@@ -730,8 +807,30 @@ function setSeverity(id, level){
   render();
 }
 function toggleMed(id){
-  if(state.form.meds.has(id)) state.form.meds.delete(id);
+  if(state.form.meds.has(id)){ state.form.meds.delete(id); delete state.form.medTimes[id]; }
   else state.form.meds.add(id);
+  render();
+}
+function setMedTiming(id, val){
+  if(state.form.medTiming[id] === val) delete state.form.medTiming[id];
+  else state.form.medTiming[id] = val;
+  render();
+}
+function togglePainLocation(id, loc){
+  const cur = state.form.painLocation[id] || [];
+  const next = cur.includes(loc) ? cur.filter(x => x !== loc) : cur.concat(loc);
+  if(next.length) state.form.painLocation[id] = next;
+  else delete state.form.painLocation[id];
+  render();
+}
+function setSleepQuality(q){
+  state.form.sleepQuality = state.form.sleepQuality === q ? '' : q;
+  render();
+}
+function toggleNoSymptomsForm(){
+  const f = state.form;
+  f.noSymptoms = !f.noSymptoms;
+  if(f.noSymptoms){ f.symptoms.clear(); f.severity = {}; f.painLocation = {}; f.other = ''; }
   render();
 }
 // Splits a comma-separated field so multiple typed items each become
@@ -759,11 +858,21 @@ function resolveOtherSymptoms(text){
 function resolveOtherMeds(text){
   return resolveOtherItems(text, allMeds, state.customMeds, MEDS_CUSTOM_PALETTE);
 }
+function resolveOtherDailyMeds(text){
+  return resolveOtherItems(text, allDailyMeds, state.customDailyMeds, MEDS_CUSTOM_PALETTE);
+}
 
 async function removeCustomSymptom(id){
   if(!confirm('Remove this symptom option? It will also be cleared from any past entries.')) return;
   state.customSymptoms = state.customSymptoms.filter(s => s.id !== id);
   state.entries = state.entries.map(e => ({...e, symptoms: e.symptoms.filter(sid => sid !== id)}));
+  await saveData();
+  render();
+}
+// Removes the option only. Timing already logged on past days is kept.
+async function removeCustomDailyMed(id){
+  if(!confirm('Remove this daily med option? Timing already logged on past days is kept.')) return;
+  state.customDailyMeds = state.customDailyMeds.filter(m => m.id !== id);
   await saveData();
   render();
 }
@@ -785,57 +894,97 @@ function editEntry(date){
     meds: new Set(entry.meds || []),
     other: '',
     otherMeds: '',
+    otherDailyMeds: '',
     notes: entry.notes || '',
-    severity: {...(entry.severity || {})}
+    severity: {...(entry.severity || {})},
+    painLocation: JSON.parse(JSON.stringify(entry.painLocation || {})),
+    medTiming: {...(entry.medTiming || {})},
+    medTimes: {...(entry.medTimes || {})},
+    sleepHours: (entry.sleepHours === null || entry.sleepHours === undefined) ? '' : String(entry.sleepHours),
+    sleepQuality: entry.sleepQuality || '',
+    noSymptoms: isSymptomFree(entry)
   };
   state.view = 'log';
   render();
 }
 function cancelEdit(){
   state.editing = null;
-  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} };
+  state.form = blankForm();
   render();
 }
 
 async function saveEntry(){
   const f = state.form;
-  const otherSymptomIds = resolveOtherSymptoms(f.other);
+  const otherSymptomIds = f.noSymptoms ? [] : resolveOtherSymptoms(f.other);
   const otherMedIds = resolveOtherMeds(f.otherMeds);
+  const addedDaily = resolveOtherDailyMeds(f.otherDailyMeds);
   const symptomIds = Array.from(new Set([...Array.from(f.symptoms), ...otherSymptomIds]));
   const medIds = Array.from(new Set([...Array.from(f.meds), ...otherMedIds]));
-  if(symptomIds.length === 0 && medIds.length === 0){ return; }
+  const sleepHours = parseSleepHours(f.sleepHours);
+  const hasSomething = symptomIds.length || medIds.length || Object.keys(f.medTiming).length ||
+    sleepHours !== null || f.sleepQuality || f.noSymptoms || f.notes.trim();
+  if(!hasSomething){
+    // Only a new daily-med option was typed — keep the option, nothing to log.
+    if(addedDaily.length){ f.otherDailyMeds = ''; await saveData(); render(); }
+    return;
+  }
 
   const idx = state.entries.findIndex(e => e.date === f.date);
   const isEditingThis = state.editing === f.date;
-  let finalSymptoms, finalMeds, finalSeverity;
-  if(idx >= 0 && !isEditingThis){
-    // Quick add to an existing day (not an explicit edit) — merge in.
-    finalSymptoms = Array.from(new Set([...state.entries[idx].symptoms, ...symptomIds]));
-    finalMeds = Array.from(new Set([...(state.entries[idx].meds||[]), ...medIds]));
-    finalSeverity = {...(state.entries[idx].severity||{}), ...f.severity};
-  } else {
-    // Explicit edit, or a brand new entry — use exactly what's checked now.
-    finalSymptoms = symptomIds;
-    finalMeds = medIds;
-    finalSeverity = {...f.severity};
+  // Quick add to a day that's already logged (not an explicit edit) merges in.
+  const existing = (idx >= 0 && !isEditingThis) ? state.entries[idx] : null;
+
+  if(existing && f.noSymptoms && symptomIds.length === 0 && (existing.symptoms||[]).length > 0){
+    if(!confirm('This day already has symptoms logged. Clear them and mark it as no symptoms?')) return;
   }
-  // Drop severity for any symptom that's no longer on the entry.
+  const clearExistingSymptoms = !!(existing && f.noSymptoms && symptomIds.length === 0);
+
+  let finalSymptoms, finalSeverity, finalPain;
+  if(existing && !clearExistingSymptoms){
+    finalSymptoms = Array.from(new Set([...(existing.symptoms||[]), ...symptomIds]));
+    finalSeverity = {...(existing.severity||{}), ...f.severity};
+    finalPain = {...(existing.painLocation||{}), ...f.painLocation};
+  } else {
+    finalSymptoms = symptomIds;
+    finalSeverity = {...f.severity};
+    finalPain = {...f.painLocation};
+  }
+  const finalMeds = existing ? Array.from(new Set([...(existing.meds||[]), ...medIds])) : medIds;
+  const finalMedTiming = {...(existing ? existing.medTiming || {} : {}), ...f.medTiming};
+  const finalMedTimes = {...(existing ? existing.medTimes || {} : {}), ...f.medTimes};
+  const finalSleepHours = sleepHours !== null ? sleepHours : (existing && existing.sleepHours !== undefined ? existing.sleepHours : null);
+  const finalSleepQuality = f.sleepQuality || (existing ? existing.sleepQuality || '' : '');
+  let finalNoSymptoms;
+  if(finalSymptoms.length > 0) finalNoSymptoms = false;
+  else if(f.noSymptoms) finalNoSymptoms = true;
+  else finalNoSymptoms = existing ? isSymptomFree(existing) : false;
+
+  // Drop follow-up details for anything no longer on the entry.
   Object.keys(finalSeverity).forEach(id => { if(!finalSymptoms.includes(id)) delete finalSeverity[id]; });
+  Object.keys(finalPain).forEach(id => { if(!finalSymptoms.includes(id) || !(finalPain[id]||[]).length) delete finalPain[id]; });
+  Object.keys(finalMedTimes).forEach(id => { if(!finalMeds.includes(id) || !finalMedTimes[id]) delete finalMedTimes[id]; });
 
   const entry = {
     date: f.date,
     symptoms: finalSymptoms,
     meds: finalMeds,
     severity: finalSeverity,
-    notes: f.notes.trim() || (idx >= 0 && !isEditingThis ? state.entries[idx].notes : '')
+    notes: f.notes.trim() || (existing ? existing.notes || '' : '')
   };
+  if(Object.keys(finalPain).length) entry.painLocation = finalPain;
+  if(Object.keys(finalMedTiming).length) entry.medTiming = finalMedTiming;
+  if(Object.keys(finalMedTimes).length) entry.medTimes = finalMedTimes;
+  if(finalSleepHours !== null) entry.sleepHours = finalSleepHours;
+  if(finalSleepQuality) entry.sleepQuality = finalSleepQuality;
+  if(finalNoSymptoms) entry.noSymptoms = true;
+
   if(idx >= 0) state.entries[idx] = entry;
   else state.entries.push(entry);
   state.entries.sort((a,b) => a.date < b.date ? 1 : -1);
 
   const ok = await saveData();
   state.editing = null;
-  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} };
+  state.form = blankForm();
   if(ok){
     state.justSaved = true;
     render();
@@ -870,39 +1019,15 @@ function resetCycleAnchor(){
   render();
 }
 
-// Logs today (or the selected date) as a deliberate "nothing to report"
-// day — distinct from simply not opening the app that day.
+// One tap: saves the selected date as an explicit "No symptoms" day —
+// distinct from a day you simply didn't log. Anything else filled in on the
+// form (meds, timing, sleep, notes) is saved with it, and meds/sleep already
+// logged for that day are kept.
 async function logCleanDay(){
   const f = state.form;
-  const idx = state.entries.findIndex(e => e.date === f.date);
-  if(idx >= 0){
-    const existing = state.entries[idx];
-    const hasData = (existing.symptoms||[]).length > 0 || (existing.meds||[]).length > 0;
-    if(hasData && !confirm('This day already has symptoms or meds logged. Replace it with a clean day (nothing to report)?')) return;
-  }
-  const entry = {
-    date: f.date,
-    symptoms: [],
-    meds: [],
-    severity: {},
-    notes: f.notes.trim() || (idx >= 0 ? state.entries[idx].notes : ''),
-    clean: true
-  };
-  if(idx >= 0) state.entries[idx] = entry;
-  else state.entries.push(entry);
-  state.entries.sort((a,b) => a.date < b.date ? 1 : -1);
-
-  const ok = await saveData();
-  state.editing = null;
-  state.form = { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', notes: '', severity: {} };
-  if(ok){
-    state.justSaved = true;
-    render();
-    setTimeout(() => { state.justSaved = false; render(); }, 1600);
-  } else {
-    render();
-    alert('Could not save on this device — check the storage warning above.');
-  }
+  f.noSymptoms = true;
+  f.symptoms.clear(); f.severity = {}; f.painLocation = {}; f.other = '';
+  await saveEntry();
 }
 
 // How many days since the most recent logged entry — used for a gentle
@@ -1159,7 +1284,8 @@ function exportBackup(){
     cycleLength: state.cycleLength,
     cycleAnchor: state.cycleAnchor,
     customSymptoms: state.customSymptoms,
-    customMeds: state.customMeds
+    customMeds: state.customMeds,
+    customDailyMeds: state.customDailyMeds
   };
   triggerDownload(JSON.stringify(payload, null, 2), `hem-backup-${todayISO()}.json`, 'application/json');
 }
@@ -1169,12 +1295,29 @@ function exportBackup(){
 function exportCSV(){
   const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = s.label);
   const medMap = {}; allMeds().forEach(m => medMap[m.id] = m.label);
-  const rows = [['Date','Symptoms','Meds taken','Notes']];
+  const dailyMap = {}; allDailyMeds().forEach(m => dailyMap[m.id] = m.label);
+  const rows = [['Date','No symptoms','Symptoms','Severity','Pain location','Daily meds','Meds taken','Med times','Sleep hours (previous night)','Sleep quality','Notes']];
   const sorted = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
   for(const e of sorted){
     const symptomsStr = (e.symptoms||[]).map(id => symptomMap[id] || id).join('; ');
+    const severityStr = (e.symptoms||[]).filter(id => (e.severity||{})[id]).map(id => `${symptomMap[id] || id}: ${e.severity[id]}`).join('; ');
+    const painStr = Object.keys(e.painLocation||{}).map(id => `${symptomMap[id] || id}: ${painLabels(e.painLocation[id]).join(', ')}`).join('; ');
+    const dailyStr = Object.keys(e.medTiming||{}).map(id => `${dailyMap[id] || id}: ${timingLabel(e.medTiming[id])}`).join('; ');
     const medsStr = (e.meds||[]).map(id => medMap[id] || id).join('; ');
-    rows.push([e.date, symptomsStr, medsStr, (e.notes||'').replace(/\n/g,' ')]);
+    const medTimesStr = Object.keys(e.medTimes||{}).map(id => `${medMap[id] || id}: ${fmtTime(e.medTimes[id])}`).join('; ');
+    rows.push([
+      e.date,
+      isSymptomFree(e) ? 'Yes' : '',
+      symptomsStr,
+      severityStr,
+      painStr,
+      dailyStr,
+      medsStr,
+      medTimesStr,
+      (e.sleepHours === null || e.sleepHours === undefined) ? '' : e.sleepHours,
+      e.sleepQuality || '',
+      (e.notes||'').replace(/\n/g,' ')
+    ]);
   }
   const csv = rows.map(r => r.map(f => '"' + String(f).replace(/"/g,'""') + '"').join(',')).join('\n');
   triggerDownload(csv, `hem-export-${todayISO()}.csv`, 'text/csv');
@@ -1199,6 +1342,7 @@ async function importBackupFile(file){
   state.cycleAnchor = parsed.cycleAnchor || null;
   state.customSymptoms = parsed.customSymptoms || [];
   state.customMeds = parsed.customMeds || [];
+  state.customDailyMeds = parsed.customDailyMeds || [];
   await saveData();
   render();
   alert('Import complete.');
@@ -1235,7 +1379,7 @@ function renderLog(){
   `;
   }).join('');
 
-  const medChips = allMeds().map(m => {
+  const medChips = reliefMedChoices().map(m => {
     const removable = !baseMedIds.has(m.id);
     return `
     <div class="symptom-toggle ${f.meds.has(m.id) ? 'active' : ''}" data-toggle-med="${m.id}">
@@ -1261,7 +1405,75 @@ function renderLog(){
             `).join('')}
           </div>
         </div>
+        ${needsPainLocation(s) ? `
+        <div class="loc-block">
+          <span class="hint" style="margin:0;">Where? (optional, pick any)</span>
+          <div class="loc-btns">
+            ${PAIN_LOCATIONS.map(l => `
+              <button type="button" class="sev-btn ${(f.painLocation[s.id]||[]).includes(l.id) ? 'active' : ''}" data-loc="${s.id}" data-loc-val="${l.id}">${l.label}</button>
+            `).join('')}
+          </div>
+        </div>` : ''}
       `).join('')}
+    </div>
+  ` : '';
+
+  const baseDailyIds = new Set(BASE_DAILY_MEDS.map(m => m.id));
+  const dailySection = `
+    <label class="field-label">Daily meds</label>
+    <div class="severity-list">
+      ${allDailyMeds().map(m => `
+        <div class="severity-row">
+          <span class="severity-row-label">${escapeHtml(m.label)}${!baseDailyIds.has(m.id) ? ` <span class="chip-remove" style="display:inline;cursor:pointer;" data-remove-daily="${m.id}">&times;</span>` : ''}</span>
+          <div class="severity-btns">
+            ${DAILY_TIMING.map(t => `
+              <button type="button" class="sev-btn ${t.id === 'missed' ? 'missed' : ''} ${f.medTiming[m.id] === t.id ? 'active' : ''}" data-timing="${m.id}" data-timing-val="${t.id}">${t.label}</button>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="hint">Normal = usual morning dose. Leave blank if you're not logging it.</div>
+    <details class="add-daily" ${f.otherDailyMeds ? 'open' : ''}>
+      <summary>Add a daily med</summary>
+      <input type="text" id="other-daily-meds-input" placeholder="e.g. vitamin D" value="${escapeHtml(f.otherDailyMeds)}">
+    </details>
+  `;
+
+  const reliefActive = reliefMedChoices().filter(m => f.meds.has(m.id));
+  const medTimeSection = reliefActive.length ? `
+    <div class="severity-list" style="margin-top:10px;">
+      ${reliefActive.map(m => `
+        <div class="severity-row">
+          <span class="severity-row-label">${escapeHtml(m.label)} <span style="color:var(--ink-soft);font-size:11.5px;">time taken (optional)</span></span>
+          <input type="time" class="time-input" data-medtime="${m.id}" value="${f.medTimes[m.id] || ''}">
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  const isToday = f.date === todayISO();
+  const sleepSection = `
+    <label class="field-label">Sleep ${isToday ? 'last night' : 'the night before'}</label>
+    <div class="severity-list">
+      <div class="severity-row">
+        <span class="severity-row-label">Hours slept</span>
+        <input type="number" class="sleep-hours" id="sleep-hours-input" inputmode="decimal" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value="${escapeHtml(f.sleepHours)}">
+      </div>
+      <div class="severity-row">
+        <span class="severity-row-label">Quality</span>
+        <div class="severity-btns">
+          ${SLEEP_QUALITY.map(q => `
+            <button type="button" class="sev-btn ${f.sleepQuality === q ? 'active' : ''}" data-sleepq="${q}">${q}</button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const noSymToggle = state.editing ? `
+    <div class="symptom-toggle no-sym-toggle ${f.noSymptoms ? 'active' : ''}" id="no-symptoms-toggle">
+      <span class="dot" style="background:var(--sage)"></span>No symptoms this day
     </div>
   ` : '';
 
@@ -1296,6 +1508,7 @@ function renderLog(){
       <input type="date" id="date-input" value="${f.date}" max="${todayISO()}">
 
       <label class="field-label">Symptoms today (tap all that apply)</label>
+      ${noSymToggle}
       ${symptomGroups}
       <label class="field-label">Add new symptoms</label>
       <input type="text" id="other-input" placeholder="e.g. dizziness, dry mouth" value="${escapeHtml(f.other)}">
@@ -1303,16 +1516,22 @@ function renderLog(){
 
       ${severitySection}
 
-      <label class="field-label">Meds taken</label>
+      ${dailySection}
+
+      <label class="field-label">Symptom-relief meds taken</label>
       <div class="symptom-grid">${medChips}</div>
+      ${medTimeSection}
       <label class="field-label">Add new meds</label>
       <input type="text" id="other-meds-input" placeholder="e.g. melatonin, magnesium" value="${escapeHtml(f.otherMeds)}">
       <div class="hint">Same as above — separate multiple with commas.</div>
 
+      ${sleepSection}
+
       <label class="field-label">Notes</label>
       <textarea id="notes-input" placeholder="Anything else worth remembering">${escapeHtml(f.notes)}</textarea>
       <button class="primary ${state.justSaved ? 'saved' : ''}" id="save-btn">${state.justSaved ? '&#10003; Saved' : (state.editing ? 'Update entry' : 'Save entry')}</button>
-      ${!state.editing ? `<button type="button" class="secondary-btn mt" id="clean-day-btn">Log a clean day (no symptoms)</button>` : ''}
+      ${!state.editing ? `<button type="button" class="secondary-btn mt" id="clean-day-btn">${isToday ? 'No symptoms today' : 'No symptoms this day'}</button>
+      <div class="hint" style="text-align:center;">One tap saves it. Any meds or sleep filled in above are saved too.</div>` : ''}
     </div>
     <p class="footer-note">Entries save right on this device — nothing leaves your phone.</p>
   `;
@@ -1332,6 +1551,8 @@ function renderHistory(){
   allSymptoms().forEach(s => symptomMap[s.id] = s);
   const medMap = {};
   allMeds().forEach(m => medMap[m.id] = m);
+  const dailyMap = {};
+  allDailyMeds().forEach(m => dailyMap[m.id] = m);
 
   // Options for the month/day filters, built from what's actually logged.
   const monthsPresent = [...new Set(state.entries.map(e => e.date.slice(0,7)))].sort().reverse();
@@ -1405,7 +1626,27 @@ function renderHistory(){
       const m = medMap[id];
       return m ? `<span class="tag" style="background:${m.color}">${escapeHtml(m.label)}</span>` : '';
     }).join('');
-    const isClean = (e.symptoms||[]).length === 0 && (e.meds||[]).length === 0;
+    const isClean = isSymptomFree(e);
+    const medTagsTimed = (e.meds || []).map(id => {
+      const m = medMap[id];
+      const t = (e.medTimes||{})[id];
+      return m ? `<span class="tag" style="background:${m.color}">${escapeHtml(m.label)}${t ? ' ' + fmtTime(t) : ''}</span>` : '';
+    }).join('');
+    const metaBits = [];
+    Object.keys(e.medTiming||{}).forEach(id => {
+      const label = (dailyMap[id] && dailyMap[id].label) || id;
+      metaBits.push(`<b>${escapeHtml(label)}:</b> ${timingLabel(e.medTiming[id])}`);
+    });
+    Object.keys(e.painLocation||{}).forEach(id => {
+      const label = (symptomMap[id] && symptomMap[id].label) || id;
+      metaBits.push(`<b>${escapeHtml(label)}:</b> ${painLabels(e.painLocation[id]).join(', ')}`);
+    });
+    if(e.sleepHours !== undefined && e.sleepHours !== null || e.sleepQuality){
+      const parts = [];
+      if(e.sleepHours !== undefined && e.sleepHours !== null) parts.push(`${e.sleepHours} h`);
+      if(e.sleepQuality) parts.push(e.sleepQuality);
+      metaBits.push(`<b>Sleep:</b> ${parts.join(', ')}`);
+    }
 
     const cycleDay = cycleDayFor(e.date);
 
@@ -1419,7 +1660,8 @@ function renderHistory(){
           </div>
         </div>
         <div class="tags">${tags || (isClean ? '<span class="tag" style="background:var(--sage)">No symptoms</span>' : '')}</div>
-        ${medTags ? `<div class="tags" style="margin-top:2px;"><span style="font-size:11px;color:var(--ink-soft);margin-right:4px;align-self:center;">Took:</span>${medTags}</div>` : ''}
+        ${medTagsTimed ? `<div class="tags" style="margin-top:2px;"><span style="font-size:11px;color:var(--ink-soft);margin-right:4px;align-self:center;">Took:</span>${medTagsTimed}</div>` : ''}
+        ${metaBits.length ? `<div class="entry-meta">${metaBits.join(' · ')}</div>` : ''}
         ${e.notes ? `<div class="notes">${escapeHtml(e.notes)}</div>` : ''}
       </div>
     `;
@@ -1515,7 +1757,7 @@ function renderPatterns(){
   // --- Insights: plain-language summary of what's in the data so far.
   // Kept descriptive, not diagnostic — useful things to bring up with a doctor.
   const spanDays = daysBetween(earliestEntryDate, sortedByDate[sortedByDate.length-1].date) + 1;
-  const cleanDayCount = state.entries.filter(e => (e.symptoms||[]).length === 0 && (e.meds||[]).length === 0).length;
+  const cleanDayCount = state.entries.filter(isSymptomFree).length;
   const topSymptoms = rings
     .map(r => ({label: r.label, n: counts[r.id] || 0}))
     .filter(x => x.n > 0)
@@ -1559,7 +1801,7 @@ function renderPatterns(){
 
   const insightsList = `
     <li>${state.entries.length} day${state.entries.length===1?'':'s'} logged over ${spanDays} day${spanDays===1?'':'s'}, starting ${fmtDate(earliestEntryDate)}.</li>
-    ${cleanDayCount ? `<li>${cleanDayCount} clean day${cleanDayCount===1?'':'s'} logged (nothing to report).</li>` : ''}
+    ${cleanDayCount ? `<li>${cleanDayCount} day${cleanDayCount===1?'':'s'} logged as no symptoms.</li>` : ''}
     ${topSymptoms.length ? `<li>Most logged symptom${topSymptoms.length>1?'s':''}: ${topSymptoms.map(s=>`${escapeHtml(s.label)} (${s.n})`).join(', ')}.</li>` : ''}
     ${topMeds.length ? `<li>Most taken med${topMeds.length>1?'s':''}: ${topMeds.map(m=>`${escapeHtml(m.label)} (${m.n})`).join(', ')}.</li>` : ''}
     ${topSevere.length ? `<li>Logged as severe: ${topSevere.map(s=>`${escapeHtml(s.label)} (${s.n})`).join(', ')}.</li>` : ''}
@@ -1742,6 +1984,31 @@ function attachHandlers(){
   document.querySelectorAll('[data-severity]').forEach(el => {
     el.addEventListener('click', () => setSeverity(el.getAttribute('data-severity'), el.getAttribute('data-level')));
   });
+  document.querySelectorAll('[data-timing]').forEach(el => {
+    el.addEventListener('click', () => setMedTiming(el.getAttribute('data-timing'), el.getAttribute('data-timing-val')));
+  });
+  document.querySelectorAll('[data-loc]').forEach(el => {
+    el.addEventListener('click', () => togglePainLocation(el.getAttribute('data-loc'), el.getAttribute('data-loc-val')));
+  });
+  document.querySelectorAll('[data-sleepq]').forEach(el => {
+    el.addEventListener('click', () => setSleepQuality(el.getAttribute('data-sleepq')));
+  });
+  document.querySelectorAll('[data-medtime]').forEach(el => {
+    el.addEventListener('input', e => {
+      const id = el.getAttribute('data-medtime');
+      if(e.target.value) state.form.medTimes[id] = e.target.value;
+      else delete state.form.medTimes[id];
+    });
+  });
+  document.querySelectorAll('[data-remove-daily]').forEach(el => {
+    el.addEventListener('click', (ev) => { ev.stopPropagation(); removeCustomDailyMed(el.getAttribute('data-remove-daily')); });
+  });
+  const sleepHoursInput = document.getElementById('sleep-hours-input');
+  if(sleepHoursInput) sleepHoursInput.addEventListener('input', e => { state.form.sleepHours = e.target.value; });
+  const otherDailyInput = document.getElementById('other-daily-meds-input');
+  if(otherDailyInput) otherDailyInput.addEventListener('input', e => { state.form.otherDailyMeds = e.target.value; });
+  const noSymToggleEl = document.getElementById('no-symptoms-toggle');
+  if(noSymToggleEl) noSymToggleEl.addEventListener('click', toggleNoSymptomsForm);
   const cleanDayBtn = document.getElementById('clean-day-btn');
   if(cleanDayBtn) cleanDayBtn.addEventListener('click', logCleanDay);
   const dateInput = document.getElementById('date-input');
