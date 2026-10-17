@@ -35,7 +35,7 @@ async function gemini(prompt: string): Promise<string | null> {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
+      generationConfig: { temperature: 0.8, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: "low" } },
     }),
   });
   if (!res.ok) {
