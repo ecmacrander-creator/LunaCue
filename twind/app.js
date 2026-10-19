@@ -195,6 +195,7 @@
     render();
   }
   document.addEventListener("focusout", () => {
+    setTimeout(() => { if (!document.activeElement?.matches?.("textarea, input")) window.scrollTo(0, 0); }, 100);
     setTimeout(() => { if (S.dirty && !document.activeElement?.matches?.("textarea, input")) { S.dirty = false; render(); } }, 50);
   });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });

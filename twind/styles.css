@@ -19,7 +19,10 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--linen); color: var(--ink); font-family: var(--sans); -webkit-text-size-adjust: 100%; }
-body { min-height: 100dvh; }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+/* App is a fixed-height column: content scrolls, tab bar sits in normal flow at the bottom.
+   No position:fixed on the bar, so iOS can't strand it mid-screen after the keyboard closes. */
+#app { height: 100dvh; display: flex; flex-direction: column; }
 button, input, textarea, select { font: inherit; color: inherit; }
 a { color: var(--wine); }
 a:hover { color: var(--wine-dark); }
@@ -28,8 +31,9 @@ a:hover { color: var(--wine-dark); }
 .boot { min-height: 100dvh; display: grid; place-items: center; font-family: var(--serif); font-style: italic; font-size: 40px; font-weight: 600; color: var(--wine); }
 
 .shell {
-  max-width: 480px; margin: 0 auto; min-height: 100dvh;
-  padding: calc(env(safe-area-inset-top) + 18px) 22px calc(env(safe-area-inset-bottom) + 96px);
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  width: 100%; max-width: 480px; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 18px) 22px 28px;
   display: flex; flex-direction: column; gap: 18px;
 }
 .shell.no-tabs { padding-bottom: calc(env(safe-area-inset-bottom) + 28px); }
@@ -134,8 +138,8 @@ select.input { min-height: 44px; width: auto; padding: 8px 12px; }
 
 /* Tabs */
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-  background: rgba(247, 239, 234, 0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  flex: none; position: relative; z-index: 5;
+  background: var(--linen);
   border-top: 1px solid var(--divider);
   padding: 6px 12px calc(env(safe-area-inset-bottom) + 6px);
 }
