@@ -665,8 +665,9 @@ let state = {
 // Patterns wheel so they always agree.
 function getAnchorDate(){
   if(state.cycleAnchor) return state.cycleAnchor;
-  if(state.entries.length === 0) return todayISO();
-  const sorted = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
+  const logged = state.entries.filter(isLoggedEntry);
+  if(logged.length === 0) return todayISO();
+  const sorted = [...logged].sort((a,b) => a.date < b.date ? -1 : 1);
   return sorted[0].date;
 }
 function cycleDayFor(dateISO){
@@ -1079,8 +1080,9 @@ async function logCleanDay(){
 // How many days since the most recent logged entry — used for a gentle
 // reminder nudge on the Log tab. null if nothing's been logged yet.
 function daysSinceLastLog(){
-  if(state.entries.length === 0) return null;
-  const mostRecent = [...state.entries].sort((a,b) => a.date < b.date ? 1 : -1)[0].date;
+  const logged = state.entries.filter(isLoggedEntry);
+  if(logged.length === 0) return null;
+  const mostRecent = [...logged].sort((a,b) => a.date < b.date ? 1 : -1)[0].date;
   return daysBetween(mostRecent, todayISO());
 }
 
@@ -1394,6 +1396,268 @@ async function importBackupFile(file){
   render();
   alert('Import complete.');
 }
+
+// ---------- Sleep import from a spreadsheet (Apple Health exports) ----------
+// Takes a .csv/.tsv/.xlsx and puts each night's sleep on the morning you woke
+// up — the same day "Sleep last night" means on the Log tab. Handles:
+//   • one row per night (Date + Asleep/Hours/Minutes column), e.g. Health
+//     Auto Export daily sleep, or a sheet you typed yourself
+//   • one row per Health sample (Start, End, Value like Core/Deep/REM/In Bed),
+//     e.g. a Shortcuts "Find Health Samples" dump. Overlapping samples from
+//     Watch + iPhone are merged so time isn't double-counted.
+// Sleep quality and everything else on a day is left alone.
+
+let xlsxLoader = null;
+function loadXLSX(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(!xlsxLoader){
+    xlsxLoader = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = () => resolve(window.XLSX);
+      s.onerror = () => { xlsxLoader = null; reject(new Error('xlsx load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  return xlsxLoader;
+}
+
+function parseDelimited(text){
+  text = text.replace(/^﻿/, '');
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  const counts = {',': 0, ';': 0, '\t': 0};
+  let q = false;
+  for(const ch of firstLine){ if(ch === '"') q = !q; else if(!q && ch in counts) counts[ch]++; }
+  const delim = Object.keys(counts).sort((a,b) => counts[b]-counts[a])[0];
+  const rows = []; let row = [], field = '', inQ = false;
+  for(let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if(inQ){
+      if(ch === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if(ch === '"') inQ = true;
+    else if(ch === delim){ row.push(field); field = ''; }
+    else if(ch === '\n' || ch === '\r'){
+      if(ch === '\r' && text[i+1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += ch;
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ''));
+}
+
+async function readSpreadsheetRows(file){
+  const name = (file.name || '').toLowerCase();
+  if(/\.(xlsx|xlsm|xls|numbers)$/.test(name)){
+    if(name.endsWith('.numbers')) throw new Error('numbers');
+    const XLSX = await loadXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), {type: 'array', cellDates: true});
+    // Use the first sheet that has a sleep-looking header row.
+    for(const sn of wb.SheetNames){
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header: 1, raw: true, defval: ''})
+        .filter(r => r.some(c => String(c).trim() !== ''));
+      if(rows.length > 1 && findSleepHeaderRow(rows) >= 0) return rows;
+    }
+    const first = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(first, {header: 1, raw: true, defval: ''});
+  }
+  return parseDelimited(await file.text());
+}
+
+// Returns {y,m,d,h,mi} in local wall-clock time, or null.
+function parseDateTimeCell(v){
+  if(v === null || v === undefined || v === '') return null;
+  if(v instanceof Date && !isNaN(v)) return {y: v.getFullYear(), m: v.getMonth()+1, d: v.getDate(), h: v.getHours(), mi: v.getMinutes()};
+  if(typeof v === 'number'){
+    // Excel serial date (days since 1899-12-30)
+    if(v > 20000 && v < 80000){
+      const ms = Math.round((v - 25569) * 86400000);
+      const dt = new Date(ms);
+      return {y: dt.getUTCFullYear(), m: dt.getUTCMonth()+1, d: dt.getUTCDate(), h: dt.getUTCHours(), mi: dt.getUTCMinutes()};
+    }
+    return null;
+  }
+  const t = String(v).trim();
+  const ampm = (h, ap) => { if(!ap) return h; ap = ap.toLowerCase(); if(ap === 'pm' && h < 12) return h + 12; if(ap === 'am' && h === 12) return 0; return h; };
+  let m;
+  if(/Z$/.test(t) && !isNaN(Date.parse(t))){
+    const dt = new Date(t);
+    return {y: dt.getFullYear(), m: dt.getMonth()+1, d: dt.getDate(), h: dt.getHours(), mi: dt.getMinutes()};
+  }
+  if((m = t.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T,]+(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*([AaPp][Mm])?)?/))){
+    return {y: +m[1], m: +m[2], d: +m[3], h: m[4] ? ampm(+m[4], m[6]) : 0, mi: m[5] ? +m[5] : 0};
+  }
+  if((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?)?/))){
+    let y = +m[3]; if(y < 100) y += 2000;
+    return {y, m: +m[1], d: +m[2], h: m[4] ? ampm(+m[4], m[6]) : 0, mi: m[5] ? +m[5] : 0};
+  }
+  const ms = Date.parse(t.replace(/ at /i, ' '));
+  if(!isNaN(ms)){
+    const dt = new Date(ms);
+    return {y: dt.getFullYear(), m: dt.getMonth()+1, d: dt.getDate(), h: dt.getHours(), mi: dt.getMinutes()};
+  }
+  return null;
+}
+const dtISO = p => `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.d).padStart(2,'0')}`;
+const dtMins = p => Date.UTC(p.y, p.m-1, p.d, p.h, p.mi) / 60000;
+// A wake-up time after 6pm belongs to the next morning (e.g. a stretch of
+// sleep that ends at 11:40pm before you wake again at 6am).
+const wakeDateFor = p => p.h >= 18 ? addDays(dtISO(p), 1) : dtISO(p);
+
+function normHeader(h){ return String(h || '').toLowerCase().replace(/[_\[\]]/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+function findSleepHeaderRow(rows){
+  for(let i = 0; i < Math.min(rows.length, 10); i++){
+    const hs = rows[i].map(normHeader);
+    const hasDate = hs.some(h => /date|day|night|start|end|wake|time/.test(h));
+    const hasSleep = hs.some(h => /sleep|asleep|in bed|hours|hrs|minutes|duration|value|core|deep|rem/.test(h));
+    if(hasDate && hasSleep) return i;
+  }
+  return -1;
+}
+
+// Classifies a Health sleep sample value. HealthKit numeric codes:
+// 0 in bed, 1 asleep, 2 awake, 3 core, 4 deep, 5 REM.
+function sleepStageKind(v){
+  if(v === '' || v === null || v === undefined) return 'asleep';
+  const s = String(v).toLowerCase().replace(/[^a-z0-9]/g, '');
+  if(/^\d$/.test(s)) return ({0:'inbed', 2:'awake'})[s] || 'asleep';
+  if(s.includes('inbed')) return 'inbed';
+  if(s.includes('awake')) return 'awake';
+  if(/asleep|core|deep|rem|sleep|light/.test(s)) return 'asleep';
+  return null;
+}
+
+function unionMinutes(intervals){
+  const iv = intervals.filter(x => x[1] > x[0]).sort((a,b) => a[0]-b[0]);
+  let total = 0, curS = null, curE = null;
+  for(const [s,e] of iv){
+    if(curE === null || s > curE){ if(curE !== null) total += curE - curS; curS = s; curE = e; }
+    else if(e > curE) curE = e;
+  }
+  if(curE !== null) total += curE - curS;
+  return total;
+}
+
+// Returns {nights: {dateISO: hours}, mode} or {error}.
+function extractSleepNights(rows){
+  const hi = findSleepHeaderRow(rows);
+  if(hi < 0) return {error: "Couldn't find a header row with a date and a sleep column."};
+  const headers = rows[hi].map(normHeader);
+  const data = rows.slice(hi + 1);
+  const col = re => headers.findIndex(h => re.test(h));
+  const notStage = h => !/in bed|inbed|awake|core|deep|rem|start|end|quality|source|unit/.test(h);
+
+  const startCol = col(/^start|\bstart|^from\b|bedtime|bed time/);
+  const endCol = headers.findIndex(h => /^end|\bend\b|\bwake|\bwoke|^to$|until/.test(h) && !/awake/.test(h));
+  const valueCol = col(/^value$|stage|^type$|category|sleep analysis$|^state$/);
+
+  // Per-night total column ("Asleep (hr)", "Total Sleep", "Hours", "Minutes"…)
+  let totalCol = headers.findIndex(h => /asleep|total sleep|hours slept|time asleep/.test(h) && notStage(h));
+  if(totalCol < 0) totalCol = headers.findIndex(h => /sleep|duration|^hours?\b|^hrs?\b|minutes|^mins?\b/.test(h) && notStage(h) && !/date|time$/.test(h));
+  const stageCols = ['core','deep','rem'].map(k => headers.findIndex(h => new RegExp('\\b'+k+'\\b').test(h) && !/start|end/.test(h))).filter(i => i >= 0);
+  const inBedCol = headers.findIndex(h => /in bed|inbed/.test(h) && !/start|end/.test(h));
+
+  const nights = {};
+  const valueIsStage = valueCol >= 0 && data.some(r => { const k = sleepStageKind(r[valueCol]); return k && String(r[valueCol]).trim() !== '' && isNaN(Number(r[valueCol])) ; });
+
+  // Mode 1: one row per Health sample (start + end, maybe a stage value).
+  if(startCol >= 0 && endCol >= 0 && (totalCol < 0 || valueIsStage)){
+    const byNight = {};
+    for(const r of data){
+      const s = parseDateTimeCell(r[startCol]), e = parseDateTimeCell(r[endCol]);
+      if(!s || !e) continue;
+      const kind = valueCol >= 0 ? sleepStageKind(r[valueCol]) : 'asleep';
+      if(!kind || kind === 'awake') continue;
+      const key = wakeDateFor(e);
+      (byNight[key] = byNight[key] || {asleep: [], inbed: []})[kind].push([dtMins(s), dtMins(e)]);
+    }
+    for(const [d, g] of Object.entries(byNight)){
+      const mins = g.asleep.length ? unionMinutes(g.asleep) : unionMinutes(g.inbed);
+      if(mins > 0 && mins <= 24*60) nights[d] = Math.round(mins/60*100)/100;
+    }
+    return {nights, mode: 'samples'};
+  }
+
+  // Mode 2: one row per night.
+  const dateCol = endCol >= 0 ? endCol : col(/date|^day$|night|time/);
+  if(dateCol < 0 || (totalCol < 0 && !stageCols.length && inBedCol < 0)) return {error: "Couldn't tell which column has the date and which has the sleep amount."};
+  const unitFor = c => { const h = c >= 0 ? headers[c] : ''; return /min/.test(h) ? 'min' : (/hr|hour/.test(h) ? 'hr' : ''); };
+  const toHours = (v, c) => {
+    if(v === '' || v === null || v === undefined) return null;
+    if(v instanceof Date) return v.getHours() + v.getMinutes()/60; // a time-formatted cell like 7:25
+    const unit = unitFor(c);
+    const n = Number(String(v).replace(/,/g, '').trim());
+    if(!isNaN(n) && String(v).trim() !== ''){
+      if(unit === 'min') return n/60;
+      if(unit === 'hr') return n;
+      if(typeof v === 'number' && n > 0 && n < 1) return n*24; // Excel duration stored as a fraction of a day
+      return n > 24 ? n/60 : n;
+    }
+    return parseSleepHours(v);
+  };
+  for(const r of data){
+    const p = parseDateTimeCell(r[dateCol]);
+    if(!p) continue;
+    const key = dateCol === endCol ? wakeDateFor(p) : dtISO(p);
+    let h = totalCol >= 0 ? toHours(r[totalCol], totalCol) : null;
+    if(!h){
+      const stages = stageCols.map(c => toHours(r[c], c)).filter(x => x);
+      if(stages.length) h = stages.reduce((a,b) => a+b, 0);
+    }
+    if(!h && inBedCol >= 0) h = toHours(r[inBedCol], inBedCol);
+    if(!h || h <= 0 || h > 24) continue;
+    nights[key] = Math.round(((nights[key] || 0) + h) * 100) / 100;
+  }
+  return {nights, mode: 'daily'};
+}
+
+async function importSleepFile(file){
+  let rows;
+  try{ rows = await readSpreadsheetRows(file); }
+  catch(e){
+    if(e.message === 'numbers') alert('Numbers files can\'t be read directly. In Numbers, use Share › Export › CSV, then import that.');
+    else alert("Couldn't open that spreadsheet. Try saving it as a .csv and importing again.");
+    return;
+  }
+  const result = extractSleepNights(rows);
+  if(result.error){ alert(result.error + '\n\nThe sheet needs a date column and a sleep column (hours, minutes, or start/end times).'); return; }
+
+  const today = todayISO();
+  const dates = Object.keys(result.nights).filter(d => d <= today).sort();
+  if(!dates.length){ alert("Didn't find any sleep values in that file."); return; }
+
+  let added = 0, updated = 0, same = 0;
+  for(const d of dates){
+    const e = state.entries.find(x => x.date === d);
+    if(!e || e.sleepHours === undefined || e.sleepHours === null) added++;
+    else if(Math.abs(Number(e.sleepHours) - result.nights[d]) < 0.02) same++;
+    else updated++;
+  }
+  if(!added && !updated){ alert(`All ${same} night${same===1?'':'s'} in that file already match what's in Hem. Nothing to change.`); return; }
+  const counts = [
+    added ? `• ${added} day${added===1?'':'s'} get sleep added` : '',
+    updated ? `• ${updated} day${updated===1?'':'s'} will be updated (different from what's there now)` : '',
+    same ? `• ${same} already match` : ''
+  ].filter(Boolean).join('\n');
+  const msg = `Found sleep for ${dates.length} night${dates.length===1?'':'s'}, ${fmtDate(dates[0])} – ${fmtDate(dates[dates.length-1])}.\n\n${counts}\n\nEach night goes on the morning you woke up, same as "Sleep last night." Nothing else on those days changes.\n\nImport?`;
+  if(!confirm(msg)) return;
+
+  for(const d of dates){
+    const hours = result.nights[d];
+    const e = state.entries.find(x => x.date === d);
+    if(e) e.sleepHours = hours;
+    // Days you haven't logged get a sleep-only entry, flagged so it doesn't
+    // count as a logged day for reminders or the default cycle day 1. Logging
+    // anything on that day later turns it into a normal entry.
+    else state.entries.push({date: d, symptoms: [], meds: [], severity: {}, notes: '', sleepHours: hours, sleepImported: true});
+  }
+  state.entries.sort((a,b) => a.date < b.date ? 1 : -1);
+  const ok = await saveData();
+  render();
+  alert(ok ? `Sleep imported for ${added + updated} day${added+updated===1?'':'s'}.` : 'Could not save on this device — check the storage warning above.');
+}
+function isLoggedEntry(e){ return !e.sleepImported; }
 
 function renderStorageBanner(){
   if(storageAvailable) return '';
@@ -1736,6 +2000,8 @@ function renderPatterns(){
         <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
         <button class="secondary-btn" id="export-csv-btn">Export as spreadsheet (.csv)</button>
         <button class="secondary-btn" id="import-backup-btn">Restore from backup</button>
+        <button class="secondary-btn" id="import-sleep-btn">Import sleep from spreadsheet</button>
+        <input type="file" id="import-sleep-input" accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
         <input type="file" id="import-file-input" accept="application/json" style="display:none;">
         <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">
           Moving to a new device or a new version of this app? Restore your backup file here.
@@ -1984,6 +2250,8 @@ function renderPatterns(){
       <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
       <button class="secondary-btn" id="export-csv-btn">Export as spreadsheet (.csv)</button>
       <button class="secondary-btn" id="import-backup-btn">Restore from backup</button>
+        <button class="secondary-btn" id="import-sleep-btn">Import sleep from spreadsheet</button>
+        <input type="file" id="import-sleep-input" accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
       <input type="file" id="import-file-input" accept="application/json" style="display:none;">
       <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">
         The backup file is the only way to move your entries to a new device or a new version of this app — keep a copy somewhere safe (Files, email to yourself, iCloud).
@@ -2139,6 +2407,15 @@ function attachHandlers(){
     importBtn.addEventListener('click', () => importInput.click());
     importInput.addEventListener('change', (e) => {
       if(e.target.files && e.target.files[0]) importBackupFile(e.target.files[0]);
+    });
+  }
+  const importSleepBtn = document.getElementById('import-sleep-btn');
+  const importSleepInput = document.getElementById('import-sleep-input');
+  if(importSleepBtn && importSleepInput){
+    importSleepBtn.addEventListener('click', () => importSleepInput.click());
+    importSleepInput.addEventListener('change', (e) => {
+      if(e.target.files && e.target.files[0]) importSleepFile(e.target.files[0]);
+      e.target.value = '';
     });
   }
 }
