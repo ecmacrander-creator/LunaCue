@@ -1596,6 +1596,13 @@ async function exportDoctorReport(){
   doc.setDrawColor(...line); doc.setLineWidth(0.75); doc.line(M, y, W - M, y);
   y += 20;
 
+  // Short intro so a doctor knows what they're looking at.
+  const intro = "I built this tracker to log symptoms I suspect are hormonal, so I could bring you specific, dated patterns instead of a vague complaint. Everything below is self-reported and was logged day by day.";
+  doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+  const introLines = doc.splitTextToSize(pdfText(intro), W - 2*M);
+  doc.text(introLines, M, y);
+  y += introLines.length * 13.5 + 10;
+
   if(reason){
     doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
     const lines = doc.splitTextToSize(pdfText(reason), W - 2*M - 24);
