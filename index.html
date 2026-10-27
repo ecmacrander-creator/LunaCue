@@ -281,6 +281,9 @@
   }
   button.primary:active{background:var(--plum-dark);}
   button.primary.saved{background:var(--sage);}
+  .doctor-range{width:100%;padding:10px;font-size:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt);color:var(--ink);font-family:'Inter',sans-serif;}
+  button.primary.doctor-btn{margin-top:10px;}
+  button.primary.doctor-btn:disabled{opacity:0.6;}
   .secondary-btn{
     display:block;
     width:100%;
@@ -1372,6 +1375,333 @@ function exportCSV(){
   triggerDownload(csv, `hem-export-${todayISO()}.csv`, 'text/csv');
 }
 
+// ---------- Doctor report (PDF) ----------
+// A clean, printable summary meant to be attached to a patient portal chart.
+// Summary numbers first, then frequency tables, then the day-by-day log.
+// Built on-device; nothing is uploaded anywhere.
+let pdfLoader = null;
+function loadScriptOnce(src){
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('load failed: ' + src));
+    document.head.appendChild(s);
+  });
+}
+function loadPDF(){
+  if(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve(window.jspdf.jsPDF);
+  if(!pdfLoader){
+    pdfLoader = loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
+      .then(() => loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'))
+      .then(() => window.jspdf.jsPDF)
+      .catch(err => { pdfLoader = null; throw err; });
+  }
+  return pdfLoader;
+}
+// The built-in PDF font only covers basic Latin, so smart punctuation and
+// emoji are swapped or dropped rather than printing as garbage.
+function pdfText(str){
+  return String(str == null ? '' : str)
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-').replace(/…/g, '...')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '');
+}
+function fmtDateLong(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+}
+const DOCTOR_RANGES = [
+  {id:'30', label:'Last 30 days'},
+  {id:'60', label:'Last 60 days'},
+  {id:'90', label:'Last 90 days'},
+  {id:'all', label:'All entries'}
+];
+
+function buildDoctorReportData(rangeId){
+  const today = todayISO();
+  const logged = state.entries.filter(isLoggedEntry);
+  const firstLogged = logged.length ? [...logged].sort((a,b) => a.date < b.date ? -1 : 1)[0].date : today;
+  const start = rangeId === 'all' ? firstLogged : addDays(today, -(Number(rangeId) - 1));
+  const inRange = state.entries
+    .filter(e => e.date >= start && e.date <= today)
+    .sort((a,b) => a.date < b.date ? -1 : 1);
+  const days = inRange.filter(isLoggedEntry);
+
+  const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = s.label);
+  const medMap = {}; allMeds().forEach(m => medMap[m.id] = m.label);
+  const dailyMap = {}; allDailyMeds().forEach(m => dailyMap[m.id] = m.label);
+
+  const symptomDays = days.filter(e => (e.symptoms||[]).length > 0);
+  const freeDays = days.filter(isSymptomFree);
+  const sleepVals = inRange.map(e => e.sleepHours).filter(h => h !== null && h !== undefined && h !== '' && !isNaN(Number(h))).map(Number);
+  const avgSleep = sleepVals.length ? sleepVals.reduce((a,b) => a+b, 0) / sleepVals.length : null;
+  const poorSleep = days.filter(e => e.sleepQuality === 'poor').length;
+
+  // Symptom frequency with severity split and cycle clustering.
+  const sym = {};
+  for(const e of days){
+    (e.symptoms||[]).forEach(id => {
+      const s = sym[id] = sym[id] || {id, n:0, mild:0, moderate:0, severe:0, last:'', dayIdxs:[]};
+      s.n++;
+      const lvl = (e.severity||{})[id];
+      if(lvl) s[lvl]++;
+      if(e.date > s.last) s.last = e.date;
+      s.dayIdxs.push(cycleDayFor(e.date) - 1);
+    });
+  }
+  const symptomRows = Object.values(sym).sort((a,b) => b.n - a.n).map(s => {
+    const win = clusterWindow(s.dayIdxs, state.cycleLength);
+    const sev = [s.severe ? `${s.severe} severe` : '', s.moderate ? `${s.moderate} moderate` : '', s.mild ? `${s.mild} mild` : ''].filter(Boolean).join(', ');
+    return [
+      symptomMap[s.id] || s.id,
+      String(s.n),
+      days.length ? Math.round(s.n / days.length * 100) + '%' : '',
+      sev || 'Not rated',
+      win ? `Days ${win.start}-${win.end}` : '',
+      fmtDateLong(s.last)
+    ];
+  });
+
+  // As-needed meds.
+  const med = {};
+  for(const e of days){
+    (e.meds||[]).forEach(id => {
+      const m = med[id] = med[id] || {id, n:0, last:''};
+      m.n++;
+      if(e.date > m.last) m.last = e.date;
+    });
+  }
+  const medRows = Object.values(med).sort((a,b) => b.n - a.n)
+    .map(m => [medMap[m.id] || m.id, String(m.n), fmtDateLong(m.last)]);
+
+  // Daily meds: only days with an answer count; blank is unknown, not missed.
+  const daily = {};
+  for(const e of days){
+    Object.entries(e.medTiming||{}).forEach(([id, val]) => {
+      if(!val) return;
+      const d = daily[id] = daily[id] || {id, answered:0, missed:0, late:0};
+      d.answered++;
+      if(val === 'missed') d.missed++;
+      else if(val !== 'normal') d.late++;
+    });
+  }
+  const dailyRows = Object.values(daily).map(d => [
+    dailyMap[d.id] || d.id,
+    String(d.answered),
+    String(d.answered - d.missed - d.late),
+    String(d.late),
+    String(d.missed)
+  ]);
+
+  // Symptom pairs logged on the same day, 2+ times.
+  const pairs = {};
+  for(const e of days){
+    const s = e.symptoms || [];
+    for(let i=0;i<s.length;i++) for(let j=i+1;j<s.length;j++){
+      const k = [s[i], s[j]].sort().join('|');
+      pairs[k] = (pairs[k]||0) + 1;
+    }
+  }
+  const pairLines = Object.entries(pairs).filter(([,n]) => n >= 2).sort((a,b) => b[1]-a[1]).slice(0,5)
+    .map(([k,n]) => { const [a,b] = k.split('|'); return `${symptomMap[a]||a} + ${symptomMap[b]||b}: ${n} days together`; });
+
+  // Day-by-day log (logged days only; sleep-only imports are summarized above).
+  const logRows = [...days].reverse().map(e => {
+    const symptoms = isSymptomFree(e) ? 'No symptoms' : (e.symptoms||[]).map(id => {
+      const lvl = (e.severity||{})[id];
+      const loc = painLabels((e.painLocation||{})[id]);
+      return (symptomMap[id] || id) + (lvl ? ` (${lvl})` : '') + (loc.length ? ` [${loc.join(', ')}]` : '');
+    }).join('\n');
+    const meds = (e.meds||[]).map(id => (medMap[id] || id) + ((e.medTimes||{})[id] ? ` ${fmtTime(e.medTimes[id])}` : ''));
+    Object.entries(e.medTiming||{}).forEach(([id, val]) => {
+      if(val && val !== 'normal') meds.push(`${dailyMap[id] || id}: ${timingLabel(val).toLowerCase()}`);
+    });
+    const sleep = [fmtSleep(e.sleepHours), e.sleepQuality].filter(Boolean).join(', ');
+    return [
+      `${fmtWeekday(e.date)} ${fmtDateLong(e.date)}`,
+      String(cycleDayFor(e.date)),
+      symptoms,
+      meds.join('\n'),
+      sleep,
+      (e.notes||'').trim()
+    ];
+  });
+
+  return {
+    start, end: today, rangeLabel: (DOCTOR_RANGES.find(r => r.id === rangeId)||{}).label || '',
+    daysLogged: days.length, symptomDays: symptomDays.length, freeDays: freeDays.length,
+    avgSleep, sleepNights: sleepVals.length, poorSleep,
+    symptomRows, medRows, dailyRows, pairLines, logRows
+  };
+}
+
+async function exportDoctorReport(){
+  const btn = document.getElementById('export-doctor-btn');
+  const rangeSel = document.getElementById('doctor-range');
+  const rangeId = rangeSel ? rangeSel.value : '90';
+  try{ window.localStorage.setItem('hem-doctor-range', rangeId); }catch(e){}
+  const data = buildDoctorReportData(rangeId);
+  if(!data.daysLogged){ alert('No logged days in that range. Try a longer range.'); return; }
+
+  if(btn){ btn.disabled = true; btn.textContent = 'Building PDF...'; }
+  let jsPDF;
+  try{ jsPDF = await loadPDF(); }
+  catch(e){
+    alert("Couldn't load the PDF tool. Check your connection and try again.");
+    if(btn){ btn.disabled = false; btn.textContent = 'Create doctor report (PDF)'; }
+    return;
+  }
+
+  const doc = new jsPDF({unit:'pt', format:'letter'});
+  const W = doc.internal.pageSize.getWidth();
+  const M = 48;
+  const ink = [43,40,34], soft = [107,101,88], plum = [107,76,107], line = [221,214,200];
+  let y = M;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...ink);
+  doc.text('Symptom Tracking Summary', M, y);
+  y += 18;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft);
+  doc.text(pdfText(`${fmtDateLong(data.start)} - ${fmtDateLong(data.end)}  (${data.rangeLabel})`), M, y);
+  y += 13;
+  doc.text(pdfText(`Patient self-reported log. Generated ${fmtDateLong(todayISO())}.`), M, y);
+  y += 10;
+  doc.setDrawColor(...line); doc.setLineWidth(0.75); doc.line(M, y, W - M, y);
+  y += 20;
+
+  // Summary tiles
+  const tiles = [
+    ['Days logged', String(data.daysLogged)],
+    ['Days with symptoms', String(data.symptomDays)],
+    ['Symptom-free days', String(data.freeDays)],
+    ['Avg sleep', data.avgSleep !== null ? fmtSleep(Math.round(data.avgSleep*100)/100) : '-']
+  ];
+  const tileW = (W - 2*M - 3*10) / 4;
+  tiles.forEach(([label, val], i) => {
+    const x = M + i*(tileW + 10);
+    doc.setFillColor(246,243,236); doc.roundedRect(x, y, tileW, 46, 5, 5, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...ink);
+    doc.text(val, x + 10, y + 21);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...soft);
+    doc.text(label, x + 10, y + 36);
+  });
+  y += 58;
+  doc.setFontSize(9); doc.setTextColor(...soft);
+  const metaBits = [`Cycle days below are estimated from a ${state.cycleLength}-day cycle starting ${fmtDateLong(getAnchorDate())}.`];
+  if(data.sleepNights) metaBits.push(`Sleep recorded on ${data.sleepNights} nights${data.poorSleep ? `; ${data.poorSleep} rated poor` : ''}.`);
+  doc.text(doc.splitTextToSize(pdfText(metaBits.join(' ')), W - 2*M), M, y);
+  y += 22;
+
+  const heading = (t) => {
+    if(y > doc.internal.pageSize.getHeight() - 90){ doc.addPage(); y = M; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...plum);
+    doc.text(t, M, y); y += 8;
+  };
+  const tableStyle = {
+    margin: {left:M, right:M},
+    styles: {font:'helvetica', fontSize:9, textColor:ink, cellPadding:5, lineColor:line, lineWidth:0.5, valign:'top', overflow:'linebreak'},
+    headStyles: {fillColor:[239,234,224], textColor:ink, fontStyle:'bold'},
+    alternateRowStyles: {fillColor:[251,249,244]},
+    theme: 'grid'
+  };
+  const after = () => { y = doc.lastAutoTable.finalY + 22; };
+  const clean = rows => rows.map(r => r.map(pdfText));
+
+  heading('Symptoms');
+  if(data.symptomRows.length){
+    doc.autoTable({...tableStyle, startY: y,
+      head: [['Symptom','Days','% of days','Severity','Clusters (cycle)','Most recent']],
+      body: clean(data.symptomRows),
+      columnStyles: {0:{cellWidth:130,fontStyle:'bold'}, 1:{halign:'center',cellWidth:38}, 2:{halign:'center',cellWidth:52}}
+    });
+    after();
+  } else { doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft); doc.text('No symptoms logged in this range.', M, y + 8); y += 30; }
+
+  if(data.medRows.length){
+    heading('As-needed medications');
+    doc.autoTable({...tableStyle, startY: y,
+      head: [['Medication','Days taken','Most recent']],
+      body: clean(data.medRows),
+      columnStyles: {0:{fontStyle:'bold'}, 1:{halign:'center'}}
+    });
+    after();
+  }
+
+  if(data.dailyRows.length){
+    heading('Daily medications');
+    doc.autoTable({...tableStyle, startY: y,
+      head: [['Medication','Days recorded','On time','Midday/night','Missed']],
+      body: clean(data.dailyRows),
+      columnStyles: {0:{fontStyle:'bold'}, 1:{halign:'center'}, 2:{halign:'center'}, 3:{halign:'center'}, 4:{halign:'center'}}
+    });
+    after();
+  }
+
+  if(data.pairLines.length){
+    heading('Symptoms logged together');
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...ink);
+    y += 6;
+    data.pairLines.forEach(l => { doc.text(pdfText('- ' + l), M, y); y += 14; });
+    y += 10;
+  }
+
+  heading('Daily log (most recent first)');
+  doc.autoTable({...tableStyle, startY: y,
+    head: [['Date','Cycle day','Symptoms','Meds','Sleep','Notes']],
+    body: clean(data.logRows),
+    styles: {...tableStyle.styles, fontSize:8.5},
+    columnStyles: {0:{cellWidth:82}, 1:{halign:'center',cellWidth:40}, 2:{cellWidth:130}, 3:{cellWidth:86}, 4:{cellWidth:52}},
+    showHead: 'everyPage'
+  });
+
+  // Footer on every page
+  const pages = doc.internal.getNumberOfPages();
+  for(let i = 1; i <= pages; i++){
+    doc.setPage(i);
+    const H = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...soft);
+    doc.text('Self-reported symptom log. Counts and patterns are descriptive, not a diagnosis.', M, H - 24);
+    doc.text(`Page ${i} of ${pages}`, W - M, H - 24, {align:'right'});
+  }
+
+  const filename = `Symptom-Summary-${data.start}-to-${data.end}.pdf`;
+  const blob = doc.output('blob');
+  let shared = false;
+  try{
+    const file = new File([blob], filename, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'Symptom summary'});
+      shared = true;
+    }
+  }catch(e){
+    if(e && e.name === 'AbortError') shared = true; // closed the share sheet
+  }
+  if(!shared){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  if(btn){ btn.disabled = false; btn.textContent = 'Create doctor report (PDF)'; }
+}
+
+function renderDoctorCard(){
+  let saved = '90';
+  try{ saved = window.localStorage.getItem('hem-doctor-range') || '90'; }catch(e){}
+  return `
+    <div class="card">
+      <span class="section-label">Share with your doctor</span>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">A clean PDF summary (symptom counts, severity, meds, sleep and a day-by-day log) to upload to your patient portal or print.</p>
+      <select id="doctor-range" class="doctor-range">
+        ${DOCTOR_RANGES.map(r => `<option value="${r.id}" ${r.id === saved ? 'selected' : ''}>${r.label}</option>`).join('')}
+      </select>
+      <button class="primary doctor-btn" id="export-doctor-btn">Create doctor report (PDF)</button>
+    </div>
+  `;
+}
+
 async function importBackupFile(file){
   const text = await file.text();
   let parsed;
@@ -1995,6 +2325,7 @@ function renderPatterns(){
         <h3>Not enough data yet</h3>
         <p>Log at least a few days — patterns start to show once you have some history.</p>
       </div>
+      ${renderDoctorCard()}
       <div class="card">
         <span class="section-label">Backup &amp; export</span>
         <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
@@ -2245,6 +2576,7 @@ function renderPatterns(){
       ` : `<p style="font-size:13px;color:var(--ink-soft);margin:0;">Not enough overlap yet — keep logging and pairs will show up here.</p>`}
     </div>
 
+    ${renderDoctorCard()}
     <div class="card">
       <span class="section-label">Backup &amp; export</span>
       <button class="secondary-btn" id="export-backup-btn">Download backup (.json)</button>
@@ -2401,6 +2733,8 @@ function attachHandlers(){
   if(exportBackupBtn) exportBackupBtn.addEventListener('click', exportBackup);
   const exportCsvBtn = document.getElementById('export-csv-btn');
   if(exportCsvBtn) exportCsvBtn.addEventListener('click', exportCSV);
+  const exportDoctorBtn = document.getElementById('export-doctor-btn');
+  if(exportDoctorBtn) exportDoctorBtn.addEventListener('click', exportDoctorReport);
   const importBtn = document.getElementById('import-backup-btn');
   const importInput = document.getElementById('import-file-input');
   if(importBtn && importInput){
