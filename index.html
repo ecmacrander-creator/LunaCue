@@ -1415,6 +1415,11 @@ function fmtDateLong(iso){
   const [y,m,d] = iso.split('-').map(Number);
   return new Date(y,m-1,d).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
 }
+// Labels that read as notes-to-self rather than symptoms or medications.
+const REPORT_NOISE = /\b(fight|fought|argu|forgot|didn'?t take|did not take|skipped|no meds)\b/i;
+const REPORT_ALWAYS_SHOW = /depress|feeling down|hopeless|suicid/i;
+function isReportNoise(label){ return REPORT_NOISE.test(String(label)); }
+function reportLabel(label){ const t = String(label||'').trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
 const DOCTOR_RANGES = [
   {id:'30', label:'Last 30 days'},
   {id:'60', label:'Last 60 days'},
@@ -1430,11 +1435,20 @@ function buildDoctorReportData(rangeId){
   const inRange = state.entries
     .filter(e => e.date >= start && e.date <= today)
     .sort((a,b) => a.date < b.date ? -1 : 1);
-  const days = inRange.filter(isLoggedEntry);
-
-  const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = s.label);
-  const medMap = {}; allMeds().forEach(m => medMap[m.id] = m.label);
+  const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = reportLabel(s.label));
+  const medMap = {}; allMeds().forEach(m => medMap[m.id] = reportLabel(m.label));
   const dailyMap = {}; allDailyMeds().forEach(m => dailyMap[m.id] = m.label);
+
+  // Leave out entries that aren't really symptoms or meds (relationship
+  // notes, "forgot to take…" reminders). They stay in the app, just not
+  // in a report headed for a medical chart.
+  const keepSym = id => !isReportNoise(symptomMap[id] || id);
+  const keepMed = id => !isReportNoise(medMap[id] || id);
+  const days = inRange.filter(isLoggedEntry).map(e => ({
+    ...e,
+    symptoms: (e.symptoms||[]).filter(keepSym),
+    meds: (e.meds||[]).filter(keepMed)
+  }));
 
   const symptomDays = days.filter(e => (e.symptoms||[]).length > 0);
   const freeDays = days.filter(isSymptomFree);
@@ -1454,7 +1468,19 @@ function buildDoctorReportData(rangeId){
       s.dayIdxs.push(cycleDayFor(e.date) - 1);
     });
   }
-  const symptomRows = Object.values(sym).sort((a,b) => b.n - a.n).map(s => {
+  // Symptoms on fewer than 10% of logged days collapse into one "also
+  // logged" line, except mood changes, which matter for a birth control
+  // question even when rare.
+  const sortedSym = Object.values(sym).sort((a,b) => b.n - a.n);
+  const isMajor = s => days.length && (s.n / days.length >= 0.10 || REPORT_ALWAYS_SHOW.test(symptomMap[s.id] || s.id));
+  const minorSym = sortedSym.filter(s => !isMajor(s));
+  const minorLine = minorSym.length ? (() => {
+    const ns = minorSym.map(s => s.n);
+    const lo = Math.min(...ns), hi = Math.max(...ns);
+    const range = lo === hi ? `${lo} time${lo===1?'':'s'}` : `${lo}-${hi} times`;
+    return `Also logged ${range}: ` + minorSym.map(s => (symptomMap[s.id] || s.id).toLowerCase()).join(', ') + '.';
+  })() : '';
+  const symptomRows = sortedSym.filter(isMajor).map(s => {
     const win = clusterWindow(s.dayIdxs, state.cycleLength);
     const sev = [s.severe ? `${s.severe} severe` : '', s.moderate ? `${s.moderate} moderate` : '', s.mild ? `${s.mild} mild` : ''].filter(Boolean).join(', ');
     return [
@@ -1541,7 +1567,7 @@ function buildDoctorReportData(rangeId){
     start, end: today, rangeLabel: (DOCTOR_RANGES.find(r => r.id === rangeId)||{}).label || '',
     daysLogged: days.length, symptomDays: symptomDays.length, freeDays: freeDays.length,
     avgSleep, sleepNights: sleepVals.length, poorSleep,
-    symptomRows, medRows, dailyRows, pairLines, logRows
+    symptomRows, minorLine, medRows, dailyRows, pairLines, logRows
   };
 }
 
@@ -1663,7 +1689,14 @@ async function exportDoctorReport(){
       {0:{cellWidth:130,fontStyle:'bold'}, 1:{halign:'center',cellWidth:38}, 2:{halign:'center',cellWidth:52}});
     doc.autoTable({...tableStyle, startY: y, head: t.head, body: t.body, columnStyles: t.columnStyles});
     after();
-  } else { doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft); doc.text('No symptoms logged in this range.', M, y + 8); y += 30; }
+  }
+  if(data.minorLine){
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...soft);
+    const ml = doc.splitTextToSize(pdfText(data.minorLine), W - 2*M);
+    doc.text(ml, M, y - 8);
+    y += ml.length * 12 + 8;
+  }
+  if(!data.symptomRows.length && !data.minorLine){ doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft); doc.text('No symptoms logged in this range.', M, y + 8); y += 30; }
 
   if(data.medRows.length){
     heading('As-needed medications');
