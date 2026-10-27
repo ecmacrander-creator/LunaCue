@@ -1668,15 +1668,8 @@ async function exportDoctorReport(){
     after();
   }
 
-  if(data.dailyRows.length){
-    heading('Daily medications');
-    doc.autoTable({...tableStyle, startY: y,
-      head: [['Medication','Days recorded','On time','Midday/night','Missed']],
-      body: clean(data.dailyRows),
-      columnStyles: {0:{fontStyle:'bold'}, 1:{halign:'center'}, 2:{halign:'center'}, 3:{halign:'center'}, 4:{halign:'center'}}
-    });
-    after();
-  }
+  // Daily meds (Yaz) are left out: they're only recorded on some days, so a
+  // count here would read as how often she took it, which isn't true.
 
   if(data.pairLines.length){
     heading('Symptoms logged together');
