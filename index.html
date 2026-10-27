@@ -285,6 +285,8 @@
   button.primary.doctor-btn{margin-top:10px;}
   .doctor-field-label{display:block;font-size:12.5px;font-weight:500;color:var(--ink);margin:0 0 4px;}
   .doctor-reason{width:100%;padding:10px;font-size:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-alt);color:var(--ink);font-family:'Inter',sans-serif;resize:vertical;margin-bottom:8px;}
+  .sev-guide{font-size:12px;line-height:1.45;color:var(--ink-soft);margin:-2px 0 8px;}
+  .sev-guide strong{color:var(--ink);font-weight:600;}
   .doctor-check{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink);margin-top:10px;}
   .doctor-check input{margin-top:3px;accent-color:var(--plum);}
   button.primary.doctor-btn:disabled{opacity:0.6;}
@@ -1420,6 +1422,15 @@ const REPORT_NOISE = /\b(fight|fought|argu|forgot|didn'?t take|did not take|skip
 const REPORT_ALWAYS_SHOW = /depress|feeling down|hopeless|suicid/i;
 function isReportNoise(label){ return REPORT_NOISE.test(String(label)); }
 function reportLabel(label){ const t = String(label||'').trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
+// Background details typed once in the Share card and printed near the top
+// of the report. Stored only on this device (not in the app's code), so
+// health details never end up in the public repo.
+const DOCTOR_FIELDS = [
+  {key:'hem-doctor-bc', label:'Current birth control', rows:1, placeholder:'e.g. Yaz, taken continuously, since 2024'},
+  {key:'hem-doctor-meds', label:'Other daily medications', rows:3, placeholder:'One per line, e.g. Medication 100 mg (reason)'},
+  {key:'hem-doctor-notes', label:'Also note', rows:2, placeholder:'e.g. Migraines never come with aura. No breakthrough bleeding or spotting.'}
+];
+function readDoctorField(key){ try{ return window.localStorage.getItem(key) || ''; }catch(e){ return ''; } }
 const DOCTOR_RANGES = [
   {id:'30', label:'Last 30 days'},
   {id:'60', label:'Last 60 days'},
@@ -1480,6 +1491,16 @@ function buildDoctorReportData(rangeId){
     const range = lo === hi ? `${lo} time${lo===1?'':'s'}` : `${lo}-${hi} times`;
     return `Also logged ${range}: ` + minorSym.map(s => (symptomMap[s.id] || s.id).toLowerCase()).join(', ') + '.';
   })() : '';
+  // Month-by-month counts for the main symptoms, so a doctor can see
+  // whether things are getting better or worse. Days logged per month is
+  // shown first so a partial month isn't misread as improvement.
+  const months = [...new Set(days.map(e => e.date.slice(0,7)))].sort().slice(-4);
+  const monthLabel = ym => { const [yy,mm] = ym.split('-').map(Number); return new Date(yy, mm-1, 1).toLocaleDateString('en-US', {month:'short'}); };
+  const trend = months.length >= 2 ? {
+    labels: months.map(monthLabel),
+    logged: months.map(ym => days.filter(e => e.date.startsWith(ym)).length),
+    counts: id => months.map(ym => String(days.filter(e => e.date.startsWith(ym) && (e.symptoms||[]).includes(id)).length))
+  } : null;
   const symptomRows = sortedSym.filter(isMajor).map(s => {
     const win = clusterWindow(s.dayIdxs, state.cycleLength);
     const sev = [s.severe ? `${s.severe} severe` : '', s.moderate ? `${s.moderate} moderate` : '', s.mild ? `${s.mild} mild` : ''].filter(Boolean).join(', ');
@@ -1489,6 +1510,7 @@ function buildDoctorReportData(rangeId){
       days.length ? Math.round(s.n / days.length * 100) + '%' : '',
       sev || 'Not rated',
       win ? `Days ${win.start}-${win.end}` : '',
+      ...(trend ? trend.counts(s.id) : []),
       fmtDateLong(s.last)
     ];
   });
@@ -1534,7 +1556,7 @@ function buildDoctorReportData(rangeId){
     }
   }
   const pairLines = Object.entries(pairs).filter(([,n]) => n >= 2).sort((a,b) => b[1]-a[1]).slice(0,5)
-    .map(([k,n]) => { const [a,b] = k.split('|'); return `${symptomMap[a]||a} + ${symptomMap[b]||b}: ${n} days together`; });
+    .map(([k,n]) => { const [a,b] = k.split('|'); return `${symptomMap[a]||a} + ${symptomMap[b]||b} (${n} days)`; });
 
   // Day-by-day log: only days with something to read (symptoms, notes,
   // as-needed meds or an off-schedule daily med). Quiet days are already
@@ -1567,7 +1589,7 @@ function buildDoctorReportData(rangeId){
     start, end: today, rangeLabel: (DOCTOR_RANGES.find(r => r.id === rangeId)||{}).label || '',
     daysLogged: days.length, symptomDays: symptomDays.length, freeDays: freeDays.length,
     avgSleep, sleepNights: sleepVals.length, poorSleep,
-    symptomRows, minorLine, medRows, dailyRows, pairLines, logRows
+    symptomRows, minorLine, trend, medRows, dailyRows, pairLines, logRows
   };
 }
 
@@ -1615,9 +1637,7 @@ async function exportDoctorReport(){
   doc.text('Symptom Tracking Summary', M, y);
   y += 18;
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft);
-  doc.text(pdfText(`${fmtDateLong(data.start)} - ${fmtDateLong(data.end)}  (${data.rangeLabel})`), M, y);
-  y += 13;
-  doc.text(pdfText(`Patient self-reported log. Generated ${fmtDateLong(todayISO())}.`), M, y);
+  doc.text(pdfText(`${fmtDateLong(data.start)} - ${fmtDateLong(data.end)}  (${data.rangeLabel})  |  Generated ${fmtDateLong(todayISO())}`), M, y);
   y += 10;
   doc.setDrawColor(...line); doc.setLineWidth(0.75); doc.line(M, y, W - M, y);
   y += 20;
@@ -1639,6 +1659,17 @@ async function exportDoctorReport(){
     doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(...ink);
     doc.text(lines, M + 12, y + 31);
     y += boxH + 14;
+  }
+
+  const background = DOCTOR_FIELDS.map(fd => [fd.label, readDoctorField(fd.key).trim()]).filter(([,v]) => v);
+  if(background.length){
+    doc.autoTable({
+      startY: y, margin:{left:M, right:M}, theme:'plain',
+      body: background.map(([k,v]) => [pdfText(k), pdfText(v)]),
+      styles:{font:'helvetica', fontSize:10, textColor:ink, cellPadding:{top:3,bottom:3,left:0,right:6}, valign:'top'},
+      columnStyles:{0:{cellWidth:140, fontStyle:'bold', textColor:soft}}
+    });
+    y = doc.lastAutoTable.finalY + 14;
   }
 
   // Summary tiles
@@ -1668,13 +1699,13 @@ async function exportDoctorReport(){
   } else { y += 4; }
 
   const heading = (t) => {
-    if(y > doc.internal.pageSize.getHeight() - 90){ doc.addPage(); y = M; }
+    if(y > doc.internal.pageSize.getHeight() - 75){ doc.addPage(); y = M; }
     doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...plum);
     doc.text(t, M, y); y += 8;
   };
   const tableStyle = {
     margin: {left:M, right:M},
-    styles: {font:'helvetica', fontSize:9, textColor:ink, cellPadding:5, lineColor:line, lineWidth:0.5, valign:'top', overflow:'linebreak'},
+    styles: {font:'helvetica', fontSize:9, textColor:ink, cellPadding:4, lineColor:line, lineWidth:0.5, valign:'top', overflow:'linebreak'},
     headStyles: {fillColor:[239,234,224], textColor:ink, fontStyle:'bold'},
     alternateRowStyles: {fillColor:[251,249,244]},
     theme: 'grid'
@@ -1684,19 +1715,25 @@ async function exportDoctorReport(){
 
   heading('Symptoms');
   if(data.symptomRows.length){
-    const t = compactTable(['Symptom','Days','% of days','Severity','Clusters (est. cycle days)','Most recent'],
-      clean(data.symptomRows),
-      {0:{cellWidth:130,fontStyle:'bold'}, 1:{halign:'center',cellWidth:38}, 2:{halign:'center',cellWidth:52}});
+    const monthCols = data.trend ? data.trend.labels : [];
+    const cs = {0:{cellWidth:120,fontStyle:'bold'}, 1:{halign:'center',cellWidth:34}, 2:{halign:'center',cellWidth:44}};
+    monthCols.forEach((_, k) => cs[5+k] = {halign:'center', cellWidth:34, fillColor:[246,241,246]});
+    const t = compactTable(['Symptom','Days','% of days','Severity','Clusters (est. cycle days)', ...monthCols, 'Most recent'],
+      clean(data.symptomRows), cs);
     doc.autoTable({...tableStyle, startY: y, head: t.head, body: t.body, columnStyles: t.columnStyles});
     after();
   }
-  if(data.minorLine){
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...soft);
-    const ml = doc.splitTextToSize(pdfText(data.minorLine), W - 2*M);
-    doc.text(ml, M, y - 8);
-    y += ml.length * 12 + 8;
+  const tableNotes = [];
+  if(data.trend && data.symptomRows.length) tableNotes.push('Shaded columns are days with each symptom per month (days logged: ' + data.trend.labels.map((l,k) => `${l} ${data.trend.logged[k]}`).join(', ') + ').');
+  if(data.minorLine) tableNotes.push(data.minorLine);
+  if(tableNotes.length){
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...soft);
+    const nl = doc.splitTextToSize(pdfText(tableNotes.join(' ')), W - 2*M);
+    doc.text(nl, M, y - 8);
+    y += (nl.length - 1) * 11 + 14;
   }
   if(!data.symptomRows.length && !data.minorLine){ doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft); doc.text('No symptoms logged in this range.', M, y + 8); y += 30; }
+
 
   if(data.medRows.length){
     heading('As-needed medications');
@@ -1714,9 +1751,9 @@ async function exportDoctorReport(){
   if(data.pairLines.length){
     heading('Symptoms logged together');
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...ink);
-    y += 6;
-    data.pairLines.forEach(l => { doc.text(pdfText('- ' + l), M, y); y += 14; });
-    y += 10;
+    const pl = doc.splitTextToSize(pdfText(data.pairLines.join('; ') + '.'), W - 2*M);
+    doc.text(pl, M, y + 6);
+    y += pl.length * 13 + 16;
   }
 
   if(includeLog && data.logRows.length){
@@ -1771,6 +1808,10 @@ function renderDoctorCard(){
     <div class="card">
       <span class="section-label">Share with your doctor</span>
       <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">A one-page PDF summary (symptom counts, severity, meds and sleep) to upload to your patient portal or print.</p>
+      ${DOCTOR_FIELDS.map(fd => `
+        <label class="doctor-field-label" for="${fd.key}">${fd.label}</label>
+        <textarea id="${fd.key}" class="doctor-reason" rows="${fd.rows}" data-doctor-key="${fd.key}" placeholder="${escapeHtml(fd.placeholder)}">${escapeHtml(readDoctorField(fd.key))}</textarea>
+      `).join('')}
       <label class="doctor-field-label" for="doctor-reason">Reason for sharing (optional)</label>
       <textarea id="doctor-reason" class="doctor-reason" rows="3" placeholder="e.g. Lower right pain getting more frequent. Want to rule out appendix or ovary.">${escapeHtml(reason)}</textarea>
       <select id="doctor-range" class="doctor-range">
@@ -2116,6 +2157,7 @@ function renderLog(){
   const checkedSymptoms = allSymptoms().filter(s => f.symptoms.has(s.id));
   const severitySection = checkedSymptoms.length ? `
     <label class="field-label">How bad? (optional)</label>
+    <p class="sev-guide"><strong>Mild:</strong> noticeable, but your day goes on as normal. <strong>Moderate:</strong> slows you down or needs medicine. <strong>Severe:</strong> stops you from normal activities.</p>
     <div class="severity-list">
       ${checkedSymptoms.map(s => `
         <div class="severity-row">
@@ -2816,6 +2858,9 @@ function attachHandlers(){
   const exportDoctorBtn = document.getElementById('export-doctor-btn');
   if(exportDoctorBtn) exportDoctorBtn.addEventListener('click', exportDoctorReport);
   const doctorReason = document.getElementById('doctor-reason');
+  document.querySelectorAll('[data-doctor-key]').forEach(el => {
+    el.addEventListener('input', () => { try{ window.localStorage.setItem(el.getAttribute('data-doctor-key'), el.value); }catch(e){} });
+  });
   if(doctorReason) doctorReason.addEventListener('input', () => { try{ window.localStorage.setItem('hem-doctor-reason', doctorReason.value); }catch(e){} });
   const doctorLog = document.getElementById('doctor-include-log');
   if(doctorLog) doctorLog.addEventListener('change', () => { try{ window.localStorage.setItem('hem-doctor-log', doctorLog.checked ? '1' : '0'); }catch(e){} });
