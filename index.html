@@ -866,11 +866,16 @@ function toggleMed(id){
   else state.form.meds.add(id);
   render();
 }
-// Vyvanse: a day with no answer counts as taken. Only an explicit "No"
-// that gets saved is recorded as missed.
-function vyvanseTaken(e){ return !(e && e.vyvanse === 'no'); }
+// Vyvanse tracking starts on VYVANSE_START. From then on, a day with no
+// answer counts as taken; only an explicit saved "No" is recorded as missed.
+// Days before the start stay blank unless you answer them yourself.
+const VYVANSE_START = '2026-10-28';
+function vyvanseStatus(date, saved){
+  if(saved === 'yes' || saved === 'no') return saved;
+  return date >= VYVANSE_START ? 'yes' : '';
+}
 function setVyvanse(val){
-  state.form.vyvanse = (val === 'no' && state.form.vyvanse === 'no') ? '' : val;
+  state.form.vyvanse = state.form.vyvanse === val ? '' : val;
   render();
 }
 function setMedTiming(id, val){
@@ -1041,7 +1046,7 @@ async function saveEntry(){
   if(finalSleepQuality) entry.sleepQuality = finalSleepQuality;
   if(finalNoSymptoms) entry.noSymptoms = true;
   const finalVyvanse = f.vyvanse || (existing ? existing.vyvanse || '' : '');
-  if(finalVyvanse === 'no') entry.vyvanse = 'no';
+  if(finalVyvanse === 'no' || (finalVyvanse === 'yes' && f.date < VYVANSE_START)) entry.vyvanse = finalVyvanse;
 
   if(idx >= 0) state.entries[idx] = entry;
   else state.entries.push(entry);
@@ -1379,7 +1384,7 @@ function exportCSV(){
       severityStr,
       painStr,
       dailyStr,
-      vyvanseTaken(e) ? 'Yes' : 'No',
+      ({yes:'Yes', no:'No'})[vyvanseStatus(e.date, e.vyvanse)] || '',
       medsStr,
       medTimesStr,
       fmtSleep(e.sleepHours),
@@ -2209,12 +2214,12 @@ function renderLog(){
       <div class="severity-row">
         <span class="severity-row-label">Took Vyvanse?</span>
         <div class="severity-btns">
-          <button type="button" class="sev-btn ${f.vyvanse !== 'no' ? 'active' : ''}" data-vyvanse="yes">Yes</button>
-          <button type="button" class="sev-btn missed ${f.vyvanse === 'no' ? 'active' : ''}" data-vyvanse="no">No</button>
+          <button type="button" class="sev-btn ${vyvanseStatus(f.date, f.vyvanse) === 'yes' ? 'active' : ''}" data-vyvanse="yes">Yes</button>
+          <button type="button" class="sev-btn missed ${vyvanseStatus(f.date, f.vyvanse) === 'no' ? 'active' : ''}" data-vyvanse="no">No</button>
         </div>
       </div>
     </div>
-    <div class="hint">Vyvanse counts as taken unless you tap No and save. Normal = usual morning dose. Leave blank if you're not logging it.</div>
+    <div class="hint">Vyvanse counts as taken unless you tap No and save (days before Oct 28 stay blank). Normal = usual morning dose. Leave blank if you're not logging it.</div>
     <details class="add-daily" ${f.otherDailyMeds ? 'open' : ''}>
       <summary>Add a daily med</summary>
       <input type="text" id="other-daily-meds-input" placeholder="e.g. vitamin D" value="${escapeHtml(f.otherDailyMeds)}">
@@ -2425,7 +2430,8 @@ function renderHistory(){
       const label = (dailyMap[id] && dailyMap[id].label) || id;
       metaBits.push(`<b>${escapeHtml(label)}:</b> ${timingLabel(e.medTiming[id])}`);
     });
-    if(!vyvanseTaken(e)) metaBits.push(`<b>Vyvanse:</b> Not taken`);
+    if(vyvanseStatus(e.date, e.vyvanse) === 'no') metaBits.push(`<b>Vyvanse:</b> Not taken`);
+    else if(e.date < VYVANSE_START && e.vyvanse === 'yes') metaBits.push(`<b>Vyvanse:</b> Taken`);
     Object.keys(e.painLocation||{}).forEach(id => {
       const label = (symptomMap[id] && symptomMap[id].label) || id;
       metaBits.push(`<b>${escapeHtml(label)}:</b> ${painLabels(e.painLocation[id]).join(', ')}`);
