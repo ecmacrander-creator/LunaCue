@@ -586,7 +586,7 @@ function isSymptomFree(e){
   return !!e && (e.noSymptoms === true || e.clean === true) && (e.symptoms||[]).length === 0;
 }
 function blankForm(){
-  return { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', otherDailyMeds: '', notes: '', severity: {}, painLocation: {}, medTiming: {}, medTimes: {}, sleepHours: '', sleepQuality: '', noSymptoms: false };
+  return { date: todayISO(), symptoms: new Set(), meds: new Set(), other: '', otherMeds: '', otherDailyMeds: '', notes: '', severity: {}, painLocation: {}, medTiming: {}, medTimes: {}, sleepHours: '', sleepQuality: '', noSymptoms: false, vyvanse: '' };
 }
 // Accepts "5h 6m", "5 hrs 6 mins", "5:06", "306m", or plain hours "5.1".
 // Returns decimal hours (2 places) or null.
@@ -866,6 +866,13 @@ function toggleMed(id){
   else state.form.meds.add(id);
   render();
 }
+// Vyvanse: a day with no answer counts as taken. Only an explicit "No"
+// that gets saved is recorded as missed.
+function vyvanseTaken(e){ return !(e && e.vyvanse === 'no'); }
+function setVyvanse(val){
+  state.form.vyvanse = (val === 'no' && state.form.vyvanse === 'no') ? '' : val;
+  render();
+}
 function setMedTiming(id, val){
   if(state.form.medTiming[id] === val) delete state.form.medTiming[id];
   else state.form.medTiming[id] = val;
@@ -957,7 +964,8 @@ function editEntry(date){
     medTimes: {...(entry.medTimes || {})},
     sleepHours: fmtSleep(entry.sleepHours),
     sleepQuality: entry.sleepQuality || '',
-    noSymptoms: isSymptomFree(entry)
+    noSymptoms: isSymptomFree(entry),
+    vyvanse: entry.vyvanse || ''
   };
   state.view = 'log';
   render();
@@ -977,7 +985,7 @@ async function saveEntry(){
   const medIds = Array.from(new Set([...Array.from(f.meds), ...otherMedIds]));
   const sleepHours = parseSleepHours(f.sleepHours);
   const hasSomething = symptomIds.length || medIds.length || Object.keys(f.medTiming).length ||
-    sleepHours !== null || f.sleepQuality || f.noSymptoms || f.notes.trim();
+    sleepHours !== null || f.sleepQuality || f.noSymptoms || f.vyvanse || f.notes.trim();
   if(!hasSomething){
     // Only a new daily-med option was typed — keep the option, nothing to log.
     if(addedDaily.length){ f.otherDailyMeds = ''; await saveData(); render(); }
@@ -1032,6 +1040,8 @@ async function saveEntry(){
   if(finalSleepHours !== null) entry.sleepHours = finalSleepHours;
   if(finalSleepQuality) entry.sleepQuality = finalSleepQuality;
   if(finalNoSymptoms) entry.noSymptoms = true;
+  const finalVyvanse = f.vyvanse || (existing ? existing.vyvanse || '' : '');
+  if(finalVyvanse === 'no') entry.vyvanse = 'no';
 
   if(idx >= 0) state.entries[idx] = entry;
   else state.entries.push(entry);
@@ -1353,7 +1363,7 @@ function exportCSV(){
   const symptomMap = {}; allSymptoms().forEach(s => symptomMap[s.id] = s.label);
   const medMap = {}; allMeds().forEach(m => medMap[m.id] = m.label);
   const dailyMap = {}; allDailyMeds().forEach(m => dailyMap[m.id] = m.label);
-  const rows = [['Date','No symptoms','Symptoms','Severity','Pain location','Daily meds','Meds taken','Med times','Sleep (previous night)','Sleep hours (decimal)','Sleep quality','Notes']];
+  const rows = [['Date','No symptoms','Symptoms','Severity','Pain location','Daily meds','Vyvanse','Meds taken','Med times','Sleep (previous night)','Sleep hours (decimal)','Sleep quality','Notes']];
   const sorted = [...state.entries].sort((a,b) => a.date < b.date ? -1 : 1);
   for(const e of sorted){
     const symptomsStr = (e.symptoms||[]).map(id => symptomMap[id] || id).join('; ');
@@ -1369,6 +1379,7 @@ function exportCSV(){
       severityStr,
       painStr,
       dailyStr,
+      vyvanseTaken(e) ? 'Yes' : 'No',
       medsStr,
       medTimesStr,
       fmtSleep(e.sleepHours),
@@ -2195,8 +2206,15 @@ function renderLog(){
           </div>
         </div>
       `).join('')}
+      <div class="severity-row">
+        <span class="severity-row-label">Took Vyvanse?</span>
+        <div class="severity-btns">
+          <button type="button" class="sev-btn ${f.vyvanse !== 'no' ? 'active' : ''}" data-vyvanse="yes">Yes</button>
+          <button type="button" class="sev-btn missed ${f.vyvanse === 'no' ? 'active' : ''}" data-vyvanse="no">No</button>
+        </div>
+      </div>
     </div>
-    <div class="hint">Normal = usual morning dose. Leave blank if you're not logging it.</div>
+    <div class="hint">Vyvanse counts as taken unless you tap No and save. Normal = usual morning dose. Leave blank if you're not logging it.</div>
     <details class="add-daily" ${f.otherDailyMeds ? 'open' : ''}>
       <summary>Add a daily med</summary>
       <input type="text" id="other-daily-meds-input" placeholder="e.g. vitamin D" value="${escapeHtml(f.otherDailyMeds)}">
@@ -2407,6 +2425,7 @@ function renderHistory(){
       const label = (dailyMap[id] && dailyMap[id].label) || id;
       metaBits.push(`<b>${escapeHtml(label)}:</b> ${timingLabel(e.medTiming[id])}`);
     });
+    if(!vyvanseTaken(e)) metaBits.push(`<b>Vyvanse:</b> Not taken`);
     Object.keys(e.painLocation||{}).forEach(id => {
       const label = (symptomMap[id] && symptomMap[id].label) || id;
       metaBits.push(`<b>${escapeHtml(label)}:</b> ${painLabels(e.painLocation[id]).join(', ')}`);
@@ -2759,6 +2778,9 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-severity]').forEach(el => {
     el.addEventListener('click', () => setSeverity(el.getAttribute('data-severity'), el.getAttribute('data-level')));
+  });
+  document.querySelectorAll('[data-vyvanse]').forEach(el => {
+    el.addEventListener('click', () => setVyvanse(el.getAttribute('data-vyvanse')));
   });
   document.querySelectorAll('[data-timing]').forEach(el => {
     el.addEventListener('click', () => setMedTiming(el.getAttribute('data-timing'), el.getAttribute('data-timing-val')));
