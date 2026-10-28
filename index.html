@@ -475,13 +475,117 @@
     text-decoration:underline;font-size:11.5px;cursor:pointer;
     font-family:inherit;padding:0;
   }
+  /* ---------- Migraine tab (Brainstorm) ---------- */
+  nav.tabbar button.mig-tab.active{color:var(--plum);}
+  .m-hero{display:flex;align-items:center;gap:12px;}
+  .m-hero svg{width:52px;height:52px;flex:none;}
+  .m-hero h2{font-size:20px;}
+  .m-hero p{margin:0;font-size:13px;color:var(--ink-soft);line-height:1.45;}
+  .m-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;}
+  .m-stat{background:var(--bg-alt);border-radius:10px;padding:10px 10px 9px;}
+  .m-stat b{display:block;font-family:'Fraunces',Georgia,serif;font-size:22px;line-height:1.1;font-weight:600;}
+  .m-stat span{font-size:11.5px;color:var(--ink-soft);line-height:1.3;display:block;margin-top:2px;}
+  .meter-wrap{margin-top:16px;}
+  .meter-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;}
+  .meter-top b{font-weight:600;}
+  .meter-status{font-size:11px;font-weight:600;border-radius:20px;padding:2px 9px;background:var(--bg-alt);color:var(--sage);white-space:nowrap;}
+  .meter-status.warn{background:#F6ECDC;color:#8A5B1C;}
+  .meter-status.over{background:#F3E7E4;color:#8C4A5B;}
+  .meter{position:relative;height:8px;background:var(--bg-alt);border-radius:99px;margin:22px 0 6px;}
+  .meter i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--plum);min-width:8px;}
+  .meter.warn i{background:#B07A2E;}
+  .meter.over i{background:#8C4A5B;}
+  .meter .tick{position:absolute;top:-17px;bottom:-3px;width:1px;background:var(--ink-soft);opacity:.55;}
+  .meter .tick span{position:absolute;top:-1px;left:4px;font:10px 'IBM Plex Mono',monospace;color:var(--ink-soft);white-space:nowrap;}
+  .m-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .m-cal-head h3{font-size:16px;}
+  .m-cal-head button{background:var(--bg-alt);border:1px solid var(--line);border-radius:8px;width:36px;height:32px;cursor:pointer;color:var(--ink);font-size:15px;}
+  .m-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .m-cal .dow{font:10px 'IBM Plex Mono',monospace;color:var(--ink-soft);text-align:center;padding-bottom:2px;}
+  .m-cal .d{aspect-ratio:1;border-radius:8px;background:var(--bg-alt);border:none;font:12px 'Inter',sans-serif;color:var(--ink-soft);position:relative;display:flex;align-items:center;justify-content:center;padding:0;}
+  .m-cal .d.mig{font-weight:600;cursor:pointer;}
+  .m-cal .d.today{box-shadow:inset 0 0 0 1.5px var(--ink);}
+  .m-cal .d .rx{position:absolute;bottom:3px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--ink-soft);}
+  .m-cal .d.light .rx{background:#fff;}
+  .m-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--ink-soft);margin-top:10px;align-items:center;}
+  .m-legend .ramp{display:inline-flex;gap:2px;vertical-align:middle;margin:0 4px;}
+  .m-legend .ramp i{width:12px;height:10px;border-radius:2px;display:inline-block;}
+  .m-legend .rxdot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ink-soft);vertical-align:middle;margin-right:4px;}
+  .m-badge{font-size:11px;font-weight:600;border-radius:20px;padding:2px 9px;background:#F3E7E4;color:#8C4A5B;white-space:nowrap;}
+  .m-badge.ok{background:var(--bg-alt);color:var(--plum);}
+  .m-row{cursor:pointer;}
+  .m-row:active{background:var(--bg-alt);}
+  .m-meta{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
+  .m-meta b{color:var(--ink);font-weight:600;}
+  .m-tagline{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+  .m-tagline span{font-size:11px;background:var(--bg-alt);border:1px solid var(--line);border-radius:20px;padding:2px 8px;color:var(--ink);}
+  .m-form .card h3{font-size:16px;margin-bottom:2px;}
+  .m-form .sub{font-size:12px;color:var(--ink-soft);margin:0 0 10px;}
+  .m-form input[type="time"]{font-family:'Inter',sans-serif;font-size:15px;color:var(--ink);background:var(--bg-alt);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-height:42px;width:130px;-webkit-appearance:none;appearance:none;}
+  .m-form select{font-family:'Inter',sans-serif;font-size:14px;color:var(--ink);background:var(--bg-alt);border:1px solid var(--line);border-radius:10px;padding:9px 10px;}
+  .m-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .m-title h2{font-size:21px;}
+  .m-title .m-sub{font-size:12.5px;color:var(--ink-soft);margin-top:3px;}
+  .time-grid{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;}
+  .time-grid > span{font-size:13px;color:var(--ink);}
+  .time-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .pain-scale{display:grid;grid-template-columns:repeat(11,1fr);gap:4px;}
+  .pain-scale button{border:none;border-radius:8px;height:40px;font:600 13px 'Inter',sans-serif;cursor:pointer;padding:0;}
+  .pain-scale button.active{outline:2.5px solid var(--ink);outline-offset:1px;}
+  .pain-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);margin-top:5px;}
+  .head-maps{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
+  .head-maps figure{margin:0;text-align:center;}
+  .head-maps figcaption{font:10.5px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-top:2px;}
+  .head-maps svg{width:100%;max-width:170px;height:auto;touch-action:manipulation;}
+  .head-base{fill:var(--bg-alt);stroke:var(--line);stroke-width:1.5;}
+  .rg{cursor:pointer;}
+  .rg rect,.rg ellipse{fill:#E3DBCC;stroke:var(--card);stroke-width:2.5;transition:fill .12s ease;}
+  .rg.on rect,.rg.on ellipse{fill:var(--plum);}
+  .rg:focus{outline:none;}
+  .rg:focus-visible rect,.rg:focus-visible ellipse{stroke:var(--ink);}
+  .head-ear{fill:#E3DBCC;stroke:var(--line);stroke-width:1.5;}
+  .head-face{fill:none;stroke:#A99E8C;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;}
+  .head-lr{font:600 11px 'IBM Plex Mono',monospace;fill:var(--ink-soft);}
+  .m-picked{font-size:12.5px;color:var(--ink);margin-top:8px;min-height:1.2em;}
+  .m-picked.empty{color:var(--ink-soft);}
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip-row .sev-btn{text-transform:none;font-size:12.5px;padding:7px 12px;}
+  .chip-row .sev-btn .x{margin-left:6px;opacity:.7;}
+  .m-group{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin:12px 0 6px;}
+  .m-group:first-child{margin-top:0;}
+  .m-from-hem{background:var(--bg-alt);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
+  .m-from-hem b{color:var(--ink);font-weight:600;}
+  .m-med{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap;}
+  .m-med:first-child{border-top:none;padding-top:2px;}
+  .m-med label{display:flex;align-items:center;gap:9px;flex:1;min-width:150px;font-size:14px;cursor:pointer;}
+  .m-med input[type="checkbox"]{width:19px;height:19px;accent-color:var(--plum);flex:none;}
+  .m-med .t{font-size:12px;color:var(--ink-soft);}
+  .m-med.off label{color:var(--ink-soft);text-decoration:line-through;}
+  .m-wx{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;}
+  .m-wx div{font-size:11.5px;color:var(--ink-soft);}
+  .m-wx b{display:block;font-family:'Fraunces',Georgia,serif;font-size:19px;color:var(--ink);font-weight:600;line-height:1.15;}
+  .m-trend{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--bg-alt);color:var(--ink);margin-top:3px;}
+  .m-trend.fall{background:#F3E7E4;color:#8C4A5B;}
+  .m-actions{display:flex;gap:10px;align-items:center;}
+  .m-actions button.primary{margin-top:0;flex:1;}
+  .m-skip{background:none;border:1px solid var(--line);border-radius:10px;padding:13px 16px;font:500 14px 'Inter',sans-serif;color:var(--ink-soft);cursor:pointer;}
+  .m-inline-add{display:flex;gap:6px;margin-top:10px;}
+  .m-inline-add input{flex:1;}
+  .m-inline-add button{flex:none;border:1px solid var(--line);background:var(--bg-alt);border-radius:10px;padding:0 14px;font:500 13px 'Inter',sans-serif;color:var(--ink);cursor:pointer;}
+  .m-class-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px;}
+  .m-class-row:first-of-type{border-top:none;}
+  .m-class-row select{max-width:58%;font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);background:var(--bg-alt);border:1px solid var(--line);border-radius:8px;padding:6px 8px;}
+  details.m-details summary{cursor:pointer;list-style:none;display:flex;align-items:center;}
+  details.m-details summary::-webkit-details-marker{display:none;}
+  details.m-details summary::after{content:'+';margin-left:auto;color:var(--ink-soft);font-size:18px;}
+  details.m-details[open] summary::after{content:'\2212';}
 </style>
 </head>
 <body>
 <div id="shell">
   <header>
-    <div class="eyebrow">Hem</div>
-    <h1>Symptom log</h1>
+    <div class="eyebrow" id="page-eyebrow">Hem</div>
+    <h1 id="page-title">Symptom log</h1>
     <div class="today mono" id="today-label"></div>
   </header>
   <main id="main"></main>
@@ -497,6 +601,10 @@
     <button data-view="patterns" id="tab-patterns">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="5.5" r="1.1" fill="currentColor" stroke="none"/></svg>
       Patterns
+    </button>
+    <button data-view="migraine" id="tab-migraine" class="mig-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 16a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 7.5a3.5 3.5 0 0 1 .5 6.97"/><path d="M13 12l-3 5h3.5l-2 4.5"/></svg>
+      Migraine
     </button>
   </nav>
 </div>
@@ -666,7 +774,18 @@ let state = {
   historySort: 'date', // 'date' or 'cycleDay'
   editing: null, // date string of the entry currently being edited, or null
   justSaved: false, // briefly true right after a successful save, to show a checkmark
-  form: blankForm()
+  form: blankForm(),
+  // Migraine tab
+  migraines: {}, // extra migraine answers keyed by Hem date
+  medClasses: {}, // med id -> pain-reliever class override
+  mCustomTriggers: [],
+  mLoc: null, // last known coordinates for weather
+  mEditing: null,
+  mForm: null,
+  mFromHem: false,
+  mCalMonth: '',
+  mWxBusy: '',
+  mWxForm: ''
 };
 
 // The date cycle day 1 counts from — a manual override if set, otherwise
@@ -812,6 +931,10 @@ function loadData(){
       state.customSymptoms = parsed.customSymptoms || [];
       state.customMeds = parsed.customMeds || [];
       state.customDailyMeds = parsed.customDailyMeds || [];
+      state.migraines = parsed.migraines || {};
+      state.medClasses = parsed.medClasses || {};
+      state.mCustomTriggers = parsed.mCustomTriggers || [];
+      state.mLoc = parsed.mLoc || null;
     }
   }catch(e){
     storageAvailable = false;
@@ -830,7 +953,11 @@ function saveData(){
       cycleAnchor: state.cycleAnchor,
       customSymptoms: state.customSymptoms,
       customMeds: state.customMeds,
-      customDailyMeds: state.customDailyMeds
+      customDailyMeds: state.customDailyMeds,
+      migraines: state.migraines,
+      medClasses: state.medClasses,
+      mCustomTriggers: state.mCustomTriggers,
+      mLoc: state.mLoc
     }));
     storageAvailable = true;
     return true;
@@ -1057,6 +1184,12 @@ async function saveEntry(){
   state.sleepFromHealth = false;
   state.form = blankForm();
   if(ok){
+    // A day with Migraine checked goes straight to the migraine questions.
+    if(entry.symptoms.includes('migraine')){
+      state.mFromHem = true;
+      openMigraine(entry.date);
+      return;
+    }
     state.justSaved = true;
     render();
     setTimeout(() => { state.justSaved = false; render(); }, 1600);
@@ -1357,7 +1490,10 @@ function exportBackup(){
     cycleAnchor: state.cycleAnchor,
     customSymptoms: state.customSymptoms,
     customMeds: state.customMeds,
-    customDailyMeds: state.customDailyMeds
+    customDailyMeds: state.customDailyMeds,
+    migraines: state.migraines,
+    medClasses: state.medClasses,
+    mCustomTriggers: state.mCustomTriggers
   };
   triggerDownload(JSON.stringify(payload, null, 2), `hem-backup-${todayISO()}.json`, 'application/json');
 }
@@ -1859,6 +1995,9 @@ async function importBackupFile(file){
   state.customSymptoms = parsed.customSymptoms || [];
   state.customMeds = parsed.customMeds || [];
   state.customDailyMeds = parsed.customDailyMeds || [];
+  state.migraines = parsed.migraines || {};
+  state.medClasses = parsed.medClasses || {};
+  state.mCustomTriggers = parsed.mCustomTriggers || [];
   await saveData();
   render();
   alert('Import complete.');
@@ -2450,6 +2589,7 @@ function renderHistory(){
         <div class="top">
           <div><span class="date">${fmtDate(e.date)}</span><span class="weekday">${fmtWeekday(e.date)}</span><span class="cycle-day">day ${cycleDay}</span></div>
           <div>
+            ${isMigraineDay(e) ? `<button class="del" data-m-open="${e.date}">migraine</button>` : ''}
             <button class="del" data-edit="${e.date}">edit</button>
             <button class="del" data-del="${e.date}">delete</button>
           </div>
@@ -2743,13 +2883,1076 @@ function renderPatterns(){
   `;
 }
 
+// =====================================================================
+// Migraine tab ("Brainstorm")
+// Every Hem day with Migraine checked is a migraine day — nothing is copied.
+// This tab stores only the extra migraine answers, keyed by that day's date
+// (state.migraines[date]). Meds, med times, sleep, Hem severity and cycle day
+// are read live from the Hem entry, so editing the Hem day updates the tab.
+// =====================================================================
+const M_QUALITY = ['Throbbing or pulsing','Pressing or tight','Stabbing or sharp','Dull ache','Burning'];
+const M_PLACES = ['Home','Work','Car','Outdoors','Store or errands','Restaurant','Kids activity','Traveling'];
+const M_AURA = ['Visual aura (zigzags, sparkles, blind spots)','Tingling or numbness','Trouble speaking'];
+const M_SYMPTOMS = ['Nausea','Vomiting','Light sensitivity','Sound sensitivity','Smell sensitivity','Dizziness','Neck pain or stiffness','Fatigue','Brain fog','Worse with movement'];
+const M_TRIGGERS = [
+  ['Lifestyle', ['Stress','Let-down after stress','Poor sleep','Too much sleep','Skipped or late meal','Dehydration','Too much caffeine','Missed caffeine','Alcohol','Physical exertion','Travel']],
+  ['Environment', ['Weather change','Heat','Bright or flickering light','Screen time','Loud noise','Strong smells','Smoke']],
+  ['Body', ['Hormonal or menstrual','Neck or shoulder tension','Eye strain','Illness']],
+  ['Food and drink', ['Aged cheese','Chocolate','Processed meats','MSG','Artificial sweeteners','Red wine']]
+];
+const M_IMPACT = ['Missed work','Left work early','Worked at reduced capacity','Missed family or social plans','Stayed in bed','Could not drive'];
+const M_REGIONS = {
+  'forehead-r':'Right forehead','forehead-l':'Left forehead','temple-r':'Right temple','temple-l':'Left temple',
+  'eye-r':'Behind right eye','eye-l':'Behind left eye','sinus-r':'Right cheek/sinus','sinus-l':'Left cheek/sinus',
+  'jaw-r':'Right jaw','jaw-l':'Left jaw','top':'Top of head','back-l':'Left back of head','back-r':'Right back of head',
+  'skull-l':'Left base of skull','skull-r':'Right base of skull','neck-l':'Left neck','neck-r':'Right neck',
+  'whole':'Whole head','moves':'Moves around'
+};
+// Pain-reliever classes. "ten" and "simple" are the groups neurologists use to
+// watch for medication-overuse headache (10+ / 15+ days a month).
+const MED_CLASSES = [
+  {id:'triptan', label:'Triptan', grp:'ten'},
+  {id:'combo', label:'Combination (Excedrin, Fioricet)', grp:'ten'},
+  {id:'opioid', label:'Opioid', grp:'ten'},
+  {id:'ergot', label:'Ergot (DHE)', grp:'ten'},
+  {id:'nsaid', label:'NSAID (ibuprofen, naproxen)', grp:'simple'},
+  {id:'acet', label:'Acetaminophen (Tylenol)', grp:'simple'},
+  {id:'aspirin', label:'Aspirin', grp:'simple'},
+  {id:'gepant', label:'Gepant (Nurtec, Ubrelvy)', grp:'acute'},
+  {id:'antiemetic', label:'Anti-nausea', grp:'other'},
+  {id:'other', label:'Not a pain reliever', grp:'other'}
+];
+const M_RANGES = [
+  {id:'30', label:'Last 30 days'}, {id:'90', label:'Last 90 days'}, {id:'180', label:'Last 6 months'},
+  {id:'365', label:'Last 12 months'}, {id:'all', label:'All migraines'}
+];
+
+function guessMedClass(label){
+  const t = String(label||'').toLowerCase();
+  if(/treximet|excedrin|fioricet|fiorinal|butalbital/.test(t)) return 'combo';
+  if(/triptan|imitrex|maxalt|relpax|zomig|amerge|frova|axert/.test(t)) return 'triptan';
+  if(/nurtec|ubrelvy|zavzpret|gepant/.test(t)) return 'gepant';
+  if(/ibuprofen|advil|motrin|naproxen|aleve|celecoxib|celebrex|ketorolac|toradol|meloxicam|diclofenac|cambia|nsaid/.test(t)) return 'nsaid';
+  if(/tylenol|acetaminophen|paracetamol/.test(t)) return 'acet';
+  if(/aspirin|bayer/.test(t)) return 'aspirin';
+  if(/oxycodone|hydrocodone|codeine|tramadol|norco|percocet|vicodin/.test(t)) return 'opioid';
+  if(/\bdhe\b|dihydroergot|ergotamine|cafergot|migranal/.test(t)) return 'ergot';
+  if(/zofran|ondansetron|reglan|metoclopramide|compazine|prochlorperazine|phenergan|promethazine/.test(t)) return 'antiemetic';
+  return 'other';
+}
+function medLabelM(id){ const m = allMeds().find(x => x.id === id); return m ? m.label : id; }
+function medClassOf(id){ return (state.medClasses && state.medClasses[id]) || guessMedClass(medLabelM(id)); }
+function medGrp(id){ const c = MED_CLASSES.find(x => x.id === medClassOf(id)); return c ? c.grp : 'other'; }
+function isPainReliever(id){ return ['ten','simple','acute'].includes(medGrp(id)); }
+
+function entryFor(date){ return state.entries.find(e => e.date === date) || null; }
+function isMigraineDay(e){ return !!e && (e.symptoms||[]).includes('migraine'); }
+function migraineDates(){ return state.entries.filter(isMigraineDay).map(e => e.date).sort().reverse(); }
+
+function blankMigraine(date){
+  const e = entryFor(date);
+  const prev = state.migraines[addDays(date, -1)];
+  return {
+    date, continued: !!(prev && prev.ongoingNextDay && isMigraineDay(entryFor(addDays(date,-1)))),
+    startTime:'', endTime:'', ongoingNextDay:false, reliefTime:'', reliefLevel:'',
+    pain:null, regions:[], quality:[], places:[], placeOther:'', aura:[],
+    symptoms: (e && (e.symptoms||[]).includes('nausea')) ? ['Nausea'] : [],
+    triggers:[], medsExcluded:[], medHelped:{}, impact:[], hoursLost:'', notes:'',
+    weather:null, reviewed:false
+  };
+}
+function migraineFor(date){
+  const base = blankMigraine(date);
+  const saved = state.migraines[date];
+  return saved ? {...base, ...saved} : base;
+}
+function hhmmNow(){ const d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+function toMin(hhmm){ if(!hhmm) return null; const [h,m] = hhmm.split(':').map(Number); return h*60 + m; }
+function dtOf(date, hhmm){ const [y,mo,d] = date.split('-').map(Number); const [h,mi] = (hhmm||'12:00').split(':').map(Number); return new Date(y, mo-1, d, h, mi); }
+function fmtMins(mins){
+  if(mins === null || mins === undefined || isNaN(mins)) return '';
+  mins = Math.round(mins);
+  const h = Math.floor(mins/60), m = mins % 60;
+  if(!h) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+function median(arr){ if(!arr.length) return null; const s = [...arr].sort((a,b)=>a-b); const k = Math.floor(s.length/2); return s.length % 2 ? s[k] : (s[k-1]+s[k])/2; }
+function sevToPain(sev){ return ({mild:3, moderate:6, severe:9})[sev] || null; }
+function dayPain(date){
+  const m = state.migraines[date];
+  if(m && m.pain !== null && m.pain !== undefined) return m.pain;
+  const e = entryFor(date);
+  return sevToPain(e && (e.severity||{}).migraine) || 5;
+}
+// One plum ramp, light to dark, for the 0–10 scale and the calendar.
+function painBg(n){ return `color-mix(in srgb, #6B4C6B ${Math.round(10 + n*8.5)}%, #F3EEE6)`; }
+function painInk(n){ return n >= 5 ? '#fff' : 'var(--ink)'; }
+function painRGB(n){
+  const p = (10 + n*8.5)/100, a = [107,76,107], b = [243,238,230];
+  return a.map((v,i) => Math.round(v*p + b[i]*(1-p)));
+}
+
+// Meds from the Hem entry, with this tab's include/helped answers.
+function migraineMeds(date, m){
+  const e = entryFor(date);
+  if(!e) return [];
+  const daily = new Set(allDailyMeds().map(x => x.id));
+  return (e.meds||[]).filter(id => !daily.has(id)).map(id => ({
+    id, label: medLabelM(id), time: (e.medTimes||{})[id] || '',
+    included: !(m.medsExcluded||[]).includes(id), helped: (m.medHelped||{})[id] || ''
+  })).sort((a,b) => (a.time||'99') < (b.time||'99') ? -1 : 1);
+}
+
+// Days chained with "continued from yesterday" count as one migraine episode.
+function groupEpisodes(datesAsc){
+  const eps = [];
+  datesAsc.forEach(d => {
+    const m = migraineFor(d);
+    const last = eps[eps.length-1];
+    if(last && m.continued && last.dates[last.dates.length-1] === addDays(d,-1)) last.dates.push(d);
+    else eps.push({dates:[d]});
+  });
+  eps.forEach(ep => {
+    const first = migraineFor(ep.dates[0]);
+    const lastD = ep.dates[ep.dates.length-1];
+    const last = migraineFor(lastD);
+    ep.start = first.startTime ? dtOf(ep.dates[0], first.startTime) : null;
+    let end = null;
+    if(last.endTime) end = dtOf(lastD, last.endTime);
+    else if(last.reliefLevel === 'complete' && last.reliefTime) end = dtOf(lastD, last.reliefTime);
+    ep.end = end;
+    ep.mins = (ep.start && ep.end && ep.end > ep.start) ? (ep.end - ep.start)/60000 : null;
+  });
+  return eps;
+}
+
+// Pain-reliever days across ALL Hem days (overuse counts every use, not only migraine days).
+function rescueCounts(startISO, endISO){
+  const any = new Set(), ten = new Set(), simple = new Set();
+  state.entries.forEach(e => {
+    if(e.date < startISO || e.date > endISO) return;
+    (e.meds||[]).forEach(id => {
+      const g = medGrp(id);
+      if(g === 'ten'){ ten.add(e.date); any.add(e.date); }
+      else if(g === 'simple'){ simple.add(e.date); any.add(e.date); }
+      else if(g === 'acute') any.add(e.date);
+    });
+  });
+  const both = new Set([...ten, ...simple]);
+  let status = 'ok';
+  if(ten.size >= 10 || simple.size >= 15 || (both.size >= 10 && ten.size && simple.size)) status = 'over';
+  else if(ten.size >= 7 || simple.size >= 11 || (both.size >= 7 && ten.size && simple.size)) status = 'warn';
+  return {any:any.size, ten:ten.size, simple:simple.size, status};
+}
+const RESCUE_STATUS = {ok:'Low', warn:'Getting close', over:'Overuse range'};
+
+// ---------- Weather (Open-Meteo, no account needed) ----------
+async function migraineCoords(){
+  if(navigator.geolocation){
+    try{
+      const p = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {timeout:9000, maximumAge:6*3600000}));
+      state.mLoc = {lat:+p.coords.latitude.toFixed(2), lon:+p.coords.longitude.toFixed(2)};
+      saveData();
+      return state.mLoc;
+    }catch(e){}
+  }
+  if(state.mLoc) return state.mLoc;
+  throw new Error('location');
+}
+const WX_CODES = [[0,'Clear'],[3,'Cloudy'],[48,'Fog'],[57,'Drizzle'],[67,'Rain'],[77,'Snow'],[82,'Showers'],[86,'Snow showers'],[99,'Thunderstorms']];
+function wxLabel(code){ if(code === null || code === undefined) return ''; if(code === 1 || code === 2) return 'Partly cloudy'; const f = WX_CODES.find(([c]) => code <= c); return f ? f[1] : ''; }
+async function fetchMigraineWeather(date, hhmm, coords){
+  const when = dtOf(date, hhmm || '12:00');
+  if(when > new Date(Date.now() + 3600000)) throw new Error('future');
+  const c = coords || await migraineCoords();
+  const vars = 'surface_pressure,temperature_2m,relative_humidity_2m,weather_code';
+  const ageDays = (Date.now() - when) / 86400000;
+  let url;
+  if(ageDays < 85){
+    url = `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&hourly=${vars}&temperature_unit=fahrenheit&timezone=auto&past_days=${Math.min(92, Math.ceil(ageDays) + 2)}&forecast_days=1`;
+  } else {
+    url = `https://archive-api.open-meteo.com/v1/archive?latitude=${c.lat}&longitude=${c.lon}&hourly=${vars}&temperature_unit=fahrenheit&timezone=auto&start_date=${addDays(date,-1)}&end_date=${date}`;
+  }
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('http');
+  const h = (await r.json()).hourly;
+  const key = `${date}T${String(when.getHours()).padStart(2,'0')}:00`;
+  const i = h.time.indexOf(key);
+  if(i < 0 || h.surface_pressure[i] === null) throw new Error('hour');
+  const p = h.surface_pressure[i], p24 = i >= 24 ? h.surface_pressure[i-24] : null;
+  return {
+    forKey: key, pressure: p, change24: (p24 === null || p24 === undefined) ? null : Math.round((p - p24)*10)/10,
+    temp: h.temperature_2m[i], humidity: h.relative_humidity_2m[i], code: h.weather_code[i]
+  };
+}
+function wxKey(date, m){ return `${date}T${(m.startTime || '12:00').slice(0,2)}:00`; }
+function inHg(hpa){ return (hpa * 0.02953).toFixed(2); }
+function wxTrend(w){
+  if(!w || w.change24 === null || w.change24 === undefined) return '';
+  if(w.change24 <= -3) return 'fall';
+  if(w.change24 >= 3) return 'rise';
+  return 'steady';
+}
+function wxSentence(w){
+  if(!w) return '';
+  const ch = (w.change24 === null || w.change24 === undefined) ? '' : `, ${w.change24 > 0 ? '+' : ''}${(w.change24*0.02953).toFixed(2)} inHg in 24h`;
+  return `${Math.round(w.temp)}°F, ${wxLabel(w.code) || 'n/a'}, ${inHg(w.pressure)} inHg${ch}`;
+}
+async function refreshMigraineWeather(date){
+  const m = state.migraines[date];
+  if(!m) return;
+  try{
+    m.weather = await fetchMigraineWeather(date, m.startTime);
+    m.weatherErr = '';
+  }catch(e){ m.weatherErr = e.message; }
+  saveData();
+  if(state.view === 'migraine' && !state.mEditing) render();
+}
+async function backfillMigraineWeather(){
+  const todo = migraineDates().filter(d => { const m = state.migraines[d]; return !(m && m.weather && m.weather.forKey === wxKey(d, m)); });
+  if(!todo.length) return;
+  let coords;
+  try{ coords = await migraineCoords(); }
+  catch(e){ alert("Couldn't get your location. Allow location for this app in Settings, then try again."); return; }
+  let done = 0, failed = 0;
+  for(const d of todo){
+    state.mWxBusy = `Adding weather… ${done + failed + 1} of ${todo.length}`;
+    render();
+    if(!state.migraines[d]) state.migraines[d] = blankMigraine(d);
+    const m = state.migraines[d];
+    try{ m.weather = await fetchMigraineWeather(d, m.startTime, coords); m.weatherErr = ''; done++; }
+    catch(e){ m.weatherErr = e.message; failed++; }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  saveData();
+  state.mWxBusy = '';
+  render();
+  if(failed) alert(`Weather added to ${done} migraine day${done===1?'':'s'}. ${failed} couldn't be found.`);
+}
+
+// ---------- Open / save ----------
+function openMigraine(date){
+  state.mEditing = date;
+  state.mForm = JSON.parse(JSON.stringify(migraineFor(date)));
+  state.view = 'migraine';
+  render();
+  window.scrollTo(0, 0);
+}
+function closeMigraine(){
+  state.mEditing = null;
+  state.mForm = null;
+  state.mFromHem = false;
+  render();
+  window.scrollTo(0, 0);
+}
+function saveMigraine(){
+  const f = state.mForm;
+  if(!f) return;
+  f.reviewed = true;
+  f.hoursLost = String(f.hoursLost || '').trim();
+  const needsWx = !(f.weather && f.weather.forKey === wxKey(f.date, f));
+  state.migraines[f.date] = f;
+  const ok = saveData();
+  const date = f.date;
+  closeMigraine();
+  if(!ok){ alert('Could not save on this device — check the storage warning.'); return; }
+  if(needsWx) refreshMigraineWeather(date);
+}
+function mToggle(field, val){
+  const arr = state.mForm[field] || (state.mForm[field] = []);
+  const i = arr.indexOf(val);
+  if(i >= 0) arr.splice(i, 1); else arr.push(val);
+  render();
+}
+
+// ---------- Rendering ----------
+const BRAIN_MARK = `<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="#6B4C6B"><circle cx="21" cy="29" r="11"/><circle cx="33" cy="22" r="13"/><circle cx="45" cy="29" r="10.5"/><rect x="12" y="28" width="42" height="13" rx="6.5"/></g><g fill="none" stroke="#F6F3EC" stroke-width="2.2" stroke-linecap="round"><path d="M24 22c3 2 3 6 0 8"/><path d="M33 15c-3 4-2 8 2 10"/><path d="M42 24c-3 2-3 6 1 8"/><path d="M30 33c3-1 6 0 7 3"/></g><path d="M33 43l-7 11h6l-3 9 11-14h-6l4-6z" fill="#C98A2E"/></svg>`;
+
+function headSVG(view, sel){
+  const r = (x1,y1,x2,y2,rx=5) => `<rect x="${x1}" y="${y1}" width="${x2-x1}" height="${y2-y1}" rx="${rx}"/>`;
+  const reg = (id, shape) => `<g class="rg ${sel.includes(id) ? 'on' : ''}" data-m-region="${id}" role="button" tabindex="0" aria-label="${M_REGIONS[id]}" aria-pressed="${sel.includes(id)}"><title>${M_REGIONS[id]}</title>${shape}</g>`;
+  const clip = `hc-${view}`;
+  let inner, outer = '', lr;
+  if(view === 'front'){
+    inner = reg('forehead-r', r(44,18,79,68)) + reg('forehead-l', r(81,18,116,68)) +
+      reg('temple-r', r(18,46,42,112)) + reg('temple-l', r(118,46,142,112)) +
+      reg('eye-r', `<ellipse cx="61" cy="86" rx="15" ry="11"/>`) + reg('eye-l', `<ellipse cx="99" cy="86" rx="15" ry="11"/>`) +
+      reg('sinus-r', r(44,102,79,132)) + reg('sinus-l', r(81,102,116,132)) +
+      reg('jaw-r', r(18,135,79,182)) + reg('jaw-l', r(81,135,142,182));
+    lr = `<text class="head-lr" x="1" y="108">R</text><text class="head-lr" x="151" y="108">L</text>`;
+  } else {
+    inner = reg('top', r(18,18,142,62)) + reg('back-l', r(18,65,79,120)) + reg('back-r', r(81,65,142,120)) +
+      reg('skull-l', r(18,123,79,182)) + reg('skull-r', r(81,123,142,182));
+    outer = reg('neck-l', r(57,176,79,206,4)) + reg('neck-r', r(81,176,103,206,4));
+    lr = `<text class="head-lr" x="1" y="108">L</text><text class="head-lr" x="151" y="108">R</text>`;
+  }
+  return `<svg viewBox="0 0 160 210" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="${clip}"><ellipse cx="80" cy="100" rx="57" ry="79"/></clipPath></defs>
+    ${outer}
+    <ellipse class="head-ear" cx="23" cy="104" rx="7" ry="15"/><ellipse class="head-ear" cx="137" cy="104" rx="7" ry="15"/>
+    <ellipse class="head-base" cx="80" cy="100" rx="57" ry="79"/>
+    <g clip-path="url(#${clip})">${inner}</g>
+    ${view === 'front' ? '<path class="head-face" d="M80 92 L74 117 Q80 121 86 117"/><path class="head-face" d="M47 70 Q61 64 75 70 M85 70 Q99 64 113 70"/><path class="head-face" d="M68 145 Q80 152 92 145"/>' : ''}
+    ${lr}
+  </svg>`;
+}
+
+function chipRow(field, options, selected, single){
+  return `<div class="chip-row">${options.map(o => {
+    const on = single ? selected === o : (selected||[]).includes(o);
+    return `<button type="button" class="sev-btn ${on ? 'active' : ''}" data-m-${single ? 'single' : 'chip'}="${field}" data-val="${escapeHtml(o)}">${escapeHtml(o)}</button>`;
+  }).join('')}</div>`;
+}
+
+function renderMigraineForm(){
+  const f = state.mForm;
+  const d = f.date;
+  const e = entryFor(d);
+  const cd = cycleDayFor(d);
+  const hemSev = e && (e.severity||{}).migraine;
+  const prevIsMig = isMigraineDay(entryFor(addDays(d, -1)));
+  const meds = migraineMeds(d, f);
+  const firstIncluded = meds.find(x => x.included && x.time);
+  let ttr = '';
+  if(f.reliefTime){
+    if(firstIncluded){ const diff = toMin(f.reliefTime) - toMin(firstIncluded.time); if(diff >= 0) ttr = `Relief ${fmtMins(diff)} after ${escapeHtml(firstIncluded.label)}.`; }
+    else if(f.startTime && !f.continued){ const diff = toMin(f.reliefTime) - toMin(f.startTime); if(diff >= 0) ttr = `Relief ${fmtMins(diff)} after it started.`; }
+  }
+  const hasSleep = e && e.sleepHours !== undefined && e.sleepHours !== null;
+  const hemNotes = [];
+  hemNotes.push(`<b>Est. cycle day ${cd}</b> (of ${state.cycleLength})`);
+  if(hasSleep || (e && e.sleepQuality)) hemNotes.push(`<b>Sleep the night before:</b> ${[hasSleep ? fmtSleep(e.sleepHours) : '', e.sleepQuality || ''].filter(Boolean).join(', ')}`);
+  else hemNotes.push(`<b>Sleep the night before:</b> not logged`);
+  if(hemSev) hemNotes.push(`<b>Hem severity:</b> ${hemSev}`);
+  const otherSym = (e ? e.symptoms : []).filter(id => id !== 'migraine').map(id => (allSymptoms().find(s => s.id === id)||{}).label).filter(Boolean);
+  if(otherSym.length) hemNotes.push(`<b>Also logged that day:</b> ${escapeHtml(otherSym.join(', '))}`);
+
+  const customTrig = state.mCustomTriggers || [];
+  const triggerGroups = M_TRIGGERS.map(([g, list]) => `<div class="m-group">${g}</div>${chipRow('triggers', list, f.triggers)}`).join('') +
+    `<div class="m-group">Your own</div><div class="chip-row">${customTrig.map(t => `<button type="button" class="sev-btn ${(f.triggers||[]).includes(t) ? 'active' : ''}" data-m-chip="triggers" data-val="${escapeHtml(t)}">${escapeHtml(t)}<span class="x" data-m-remove-trigger="${escapeHtml(t)}" title="Remove option">&times;</span></button>`).join('')}</div>
+    <div class="m-inline-add"><input type="text" id="m-new-trigger" placeholder="Add a trigger, e.g. long drive"><button type="button" id="m-add-trigger">Add</button></div>`;
+
+  const picked = (f.regions||[]).map(id => M_REGIONS[id]).filter(Boolean);
+  const w = f.weather;
+  const wxStale = w && w.forKey !== wxKey(d, f);
+  const tr = wxTrend(w);
+  const wxBlock = w ? `
+    <div class="m-wx">
+      <div><b>${inHg(w.pressure)}</b>inHg pressure${w.change24 !== null && w.change24 !== undefined ? `<br><span class="m-trend ${tr === 'fall' ? 'fall' : ''}">${tr === 'fall' ? 'Falling' : tr === 'rise' ? 'Rising' : 'Steady'} ${w.change24 > 0 ? '+' : ''}${(w.change24*0.02953).toFixed(2)} in 24h</span>` : ''}</div>
+      <div><b>${Math.round(w.temp)}°F</b>${escapeHtml(wxLabel(w.code))}</div>
+      <div><b>${Math.round(w.humidity)}%</b>humidity</div>
+    </div>
+    ${wxStale ? '<div class="hint">Start time changed. Weather updates when you save.</div>' : ''}` :
+    `<p class="sub" style="margin:0;">${state.mWxForm ? escapeHtml(state.mWxForm) : 'Pulled automatically for the start time when you save (uses your location).'}</p>`;
+
+  return `
+    ${renderStorageBanner()}
+    ${state.mFromHem ? `<div class="banner nudge">Saved in Hem. A few migraine questions below, all optional.</div>` : ''}
+    <div class="m-form">
+    <div class="card">
+      <div class="m-title">
+        <div><h2>Migraine · ${fmtDate(d)}</h2><div class="m-sub">${fmtWeekday(d)}${f.reviewed ? '' : ' · new'}</div></div>
+      </div>
+      <div class="m-from-hem" style="margin-top:12px;">${hemNotes.join('<br>')}</div>
+    </div>
+
+    <div class="card">
+      <h3>Timing</h3>
+      <p class="sub">Times are for ${fmtDate(d)}.</p>
+      ${prevIsMig ? `<div class="symptom-toggle ${f.continued ? 'active' : ''}" data-m-toggle="continued" style="margin-bottom:12px;"><span class="dot" style="background:var(--plum)"></span>Same migraine as yesterday (continued overnight)</div>` : ''}
+      <div class="time-grid">
+        ${f.continued ? '' : `<span>Started</span><div class="time-row"><input type="time" data-m-input="startTime" value="${f.startTime}"><button type="button" class="sev-btn" data-m-now="startTime">Now</button></div>`}
+        <span>Relief noticed</span><div class="time-row"><input type="time" data-m-input="reliefTime" value="${f.reliefTime}"><button type="button" class="sev-btn" data-m-now="reliefTime">Now</button></div>
+        <span></span>${chipRow('reliefLevel', ['Partial','Complete'].map(x=>x), f.reliefLevel ? (f.reliefLevel === 'complete' ? 'Complete' : 'Partial') : '', true).replace(/data-m-single="reliefLevel"/g, 'data-m-relief="1"')}
+        ${f.ongoingNextDay ? '' : `<span>Ended</span><div class="time-row"><input type="time" data-m-input="endTime" value="${f.endTime}"><button type="button" class="sev-btn" data-m-now="endTime">Now</button></div>`}
+      </div>
+      ${ttr ? `<div class="hint" style="margin-top:10px;font-size:12.5px;color:var(--plum);">${ttr}</div>` : ''}
+      <div class="symptom-toggle ${f.ongoingNextDay ? 'active' : ''}" data-m-toggle="ongoingNextDay" style="margin-top:12px;"><span class="dot" style="background:var(--plum)"></span>Still going past midnight</div>
+      ${f.ongoingNextDay ? '<div class="hint">Log Migraine in Hem tomorrow too. That day will link to this one so it counts as one migraine.</div>' : ''}
+    </div>
+
+    <div class="card">
+      <h3>Pain</h3>
+      <p class="sub">Worst it got, 0 to 10.</p>
+      <div class="pain-scale">${Array.from({length:11}, (_, n) => `<button type="button" class="${f.pain === n ? 'active' : ''}" style="background:${painBg(n)};color:${painInk(n)}" data-m-pain="${n}" aria-label="Pain ${n}">${n}</button>`).join('')}</div>
+      <div class="pain-ends"><span>None</span><span>Worst imaginable</span></div>
+      <label class="field-label">Where it hurt (tap all that apply)</label>
+      <div class="head-maps">
+        <figure>${headSVG('front', f.regions||[])}<figcaption>Front</figcaption></figure>
+        <figure>${headSVG('back', f.regions||[])}<figcaption>Back</figcaption></figure>
+      </div>
+      <div style="margin-top:8px;">${chipRow('regions-extra', ['Whole head','Moves around'], (f.regions||[]).map(id => M_REGIONS[id]))}</div>
+      <div class="m-picked ${picked.length ? '' : 'empty'}">${picked.length ? escapeHtml(picked.join(', ')) : 'Nothing picked yet. R and L are your right and left.'}</div>
+      <label class="field-label">What it felt like</label>
+      ${chipRow('quality', M_QUALITY, f.quality)}
+    </div>
+
+    <div class="card">
+      <h3>Where you were</h3>
+      <p class="sub" style="margin-bottom:10px;">When it started.</p>
+      ${chipRow('places', M_PLACES, f.places)}
+      <input type="text" data-m-input="placeOther" placeholder="Somewhere else" value="${escapeHtml(f.placeOther)}" style="margin-top:10px;">
+      <label class="field-label" style="display:flex;align-items:center;gap:8px;">Weather ${w ? `<button type="button" class="link-btn" id="m-wx-refresh" style="display:inline;margin-left:auto;">Refresh</button>` : ''}</label>
+      ${wxBlock}
+    </div>
+
+    <div class="card">
+      <h3>Aura and symptoms</h3>
+      <label class="field-label" style="margin-top:6px;">Aura</label>
+      ${chipRow('aura', M_AURA, f.aura)}
+      <label class="field-label">Other symptoms</label>
+      ${chipRow('symptoms', M_SYMPTOMS, f.symptoms)}
+    </div>
+
+    <div class="card">
+      <h3>Possible triggers</h3>
+      <p class="sub">Anything that might have set it off.${hasSleep && e.sleepHours < 6 ? ' Hem shows short sleep the night before.' : ''}${(cd >= state.cycleLength - 1 || cd <= 3) ? ' Est. cycle day is near day 1.' : ''}</p>
+      ${triggerGroups}
+    </div>
+
+    <div class="card">
+      <h3>Medication</h3>
+      <p class="sub">From this day in Hem. Uncheck anything that wasn't for the migraine.</p>
+      ${meds.length ? meds.map(x => `
+        <div class="m-med ${x.included ? '' : 'off'}">
+          <label><input type="checkbox" data-m-med="${x.id}" ${x.included ? 'checked' : ''}>${escapeHtml(x.label)} <span class="t">${x.time ? fmtTime(x.time) : 'no time logged'}</span></label>
+          ${x.included ? `<div class="severity-btns">${[['yes','Helped'],['some','Some'],['no','No']].map(([v,l]) => `<button type="button" class="sev-btn ${v === 'no' ? 'missed' : v === 'yes' ? 'sage' : ''} ${x.helped === v ? 'active' : ''}" data-m-helped="${x.id}" data-val="${v}">${l}</button>`).join('')}</div>` : ''}
+        </div>`).join('') : '<p class="sub" style="margin:0;">No meds logged in Hem for this day.</p>'}
+      <button type="button" class="link-btn" id="m-edit-hem" style="margin-top:10px;">Add or change meds and times in Hem</button>
+    </div>
+
+    <div class="card">
+      <h3>Impact</h3>
+      ${chipRow('impact', M_IMPACT, f.impact)}
+      <div class="severity-row" style="margin-top:12px;">
+        <span class="severity-row-label">Hours lost to it</span>
+        <input type="number" inputmode="decimal" min="0" step="0.5" data-m-input="hoursLost" value="${escapeHtml(String(f.hoursLost||''))}" style="width:90px;text-align:center;">
+      </div>
+      <label class="field-label">Notes for your neurologist</label>
+      <textarea data-m-input="notes" placeholder="Anything unusual, what you tried, questions to ask">${escapeHtml(f.notes)}</textarea>
+    </div>
+
+    <div class="m-actions">
+      <button type="button" class="m-skip" id="m-cancel">${state.mFromHem ? 'Skip' : 'Cancel'}</button>
+      <button type="button" class="primary" id="m-save">Save migraine details</button>
+    </div>
+    </div>
+  `;
+}
+
+function renderMigraineCalendar(dates){
+  const now = todayISO();
+  const ym = state.mCalMonth || now.slice(0,7);
+  const [y, mo] = ym.split('-').map(Number);
+  const first = new Date(y, mo-1, 1), daysIn = new Date(y, mo, 0).getDate();
+  const set = new Set(dates);
+  const rxDays = new Set(state.entries.filter(e => (e.meds||[]).some(isPainReliever)).map(e => e.date));
+  let cells = ['S','M','T','W','T','F','S'].map(x => `<div class="dow">${x}</div>`).join('');
+  for(let i = 0; i < first.getDay(); i++) cells += '<div></div>';
+  for(let dd = 1; dd <= daysIn; dd++){
+    const iso = `${ym}-${String(dd).padStart(2,'0')}`;
+    const mig = set.has(iso);
+    const p = mig ? dayPain(iso) : 0;
+    const style = mig ? `background:${painBg(p)};color:${painInk(p)}` : '';
+    cells += `<button type="button" class="d ${mig ? 'mig' : ''} ${mig && p >= 5 ? 'light' : ''} ${iso === now ? 'today' : ''}" ${mig ? `data-m-open="${iso}" aria-label="Migraine ${fmtDate(iso)}, pain ${p}"` : 'tabindex="-1" aria-hidden="true"'} style="${style}">${dd}${rxDays.has(iso) ? '<span class="rx"></span>' : ''}</button>`;
+  }
+  const monthCount = dates.filter(d => d.startsWith(ym)).length;
+  return `
+    <div class="card">
+      <div class="m-cal-head">
+        <button type="button" data-m-cal="-1" aria-label="Previous month">&#8249;</button>
+        <h3>${fmtMonthHeader(ym + '-01')} <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:400;color:var(--ink-soft);">· ${monthCount} day${monthCount===1?'':'s'}</span></h3>
+        <button type="button" data-m-cal="1" aria-label="Next month" ${ym >= now.slice(0,7) ? 'disabled style="opacity:.35"' : ''}>&#8250;</button>
+      </div>
+      <div class="m-cal">${cells}</div>
+      <div class="m-legend">
+        <span>Pain<span class="ramp">${[2,4,6,8,10].map(n => `<i style="background:${painBg(n)}"></i>`).join('')}</span>worse</span>
+        <span><span class="rxdot"></span>pain reliever taken</span>
+      </div>
+    </div>`;
+}
+
+function renderMigraineList(){
+  const dates = migraineDates();
+  const today = todayISO();
+  const month = today.slice(0,7);
+  const monthDates = dates.filter(d => d.startsWith(month));
+  const rc = rescueCounts(month + '-01', today);
+  const last90 = dates.filter(d => d >= addDays(today, -89));
+  const needs = dates.filter(d => !(state.migraines[d] && state.migraines[d].reviewed));
+  const pains = monthDates.map(d => state.migraines[d] && state.migraines[d].pain).filter(p => p !== null && p !== undefined);
+  const lastDays = dates.length ? daysBetween(dates[0], today) : null;
+  const noWx = dates.filter(d => { const m = state.migraines[d]; return !(m && m.weather && m.weather.forKey === wxKey(d, m)); }).length;
+
+  const hero = `
+    <div class="card">
+      <div class="m-hero">${BRAIN_MARK}<p>Every day you check Migraine in Hem shows up here. Add the details your neurologist will ask about.</p></div>
+      <div class="m-stats">
+        <div class="m-stat"><b>${monthDates.length}</b><span>migraine days this month</span></div>
+        <div class="m-stat"><b>${last90.length}</b><span>in the last 90 days</span></div>
+        <div class="m-stat"><b>${lastDays === null ? '–' : lastDays}</b><span>${lastDays === 1 ? 'day' : 'days'} since the last one</span></div>
+      </div>
+      <div class="meter-wrap">
+        <div class="meter-top"><span><b>${rc.any}</b> pain-reliever day${rc.any===1?'':'s'} this month${pains.length ? ` · avg pain ${(pains.reduce((a,b)=>a+b,0)/pains.length).toFixed(1)}` : ''}</span><span class="meter-status ${rc.status === 'ok' ? '' : rc.status}">${RESCUE_STATUS[rc.status]}</span></div>
+        <div class="meter ${rc.status === 'ok' ? '' : rc.status}" role="img" aria-label="${rc.any} of 31 days">
+          <i style="width:${Math.min(100, rc.any/31*100)}%"></i>
+          <span class="tick" style="left:${10/31*100}%"><span>10</span></span>
+          <span class="tick" style="left:${15/31*100}%"><span>15</span></span>
+        </div>
+        <div class="hint">Counts every Hem day with a pain reliever, not just migraine days. Neurologists watch for 10+ days a month of triptans or combination meds, or 15+ of ibuprofen, naproxen or Tylenol.</div>
+      </div>
+    </div>`;
+
+  if(!dates.length){
+    return renderStorageBanner() + hero + `
+      <div class="empty-state"><h3>No migraines logged yet</h3><p>Check Migraine on the Log tab and save. The migraine questions open here right after.</p></div>`;
+  }
+
+  let list = '';
+  let lastMonth = '';
+  dates.forEach(d => {
+    const mh = fmtMonthHeader(d);
+    if(mh !== lastMonth){ list += `<div class="month-header">${mh}</div>`; lastMonth = mh; }
+    const m = migraineFor(d);
+    const e = entryFor(d);
+    const meds = migraineMeds(d, m).filter(x => x.included);
+    const bits = [];
+    const times = [];
+    if(m.continued) times.push('continued from the day before');
+    else if(m.startTime) times.push(`started ${fmtTime(m.startTime)}`);
+    if(m.reliefTime) times.push(`relief ${fmtTime(m.reliefTime)}${m.reliefLevel ? ` (${m.reliefLevel})` : ''}`);
+    if(m.ongoingNextDay) times.push('into the next day');
+    else if(m.endTime) times.push(`ended ${fmtTime(m.endTime)}`);
+    if(times.length) bits.push(times.join(' · '));
+    if(meds.length) bits.push(`<b>Meds:</b> ${meds.map(x => escapeHtml(x.label) + (x.time ? ' ' + fmtTime(x.time) : '') + (x.helped ? ` (${({yes:'helped',some:'some help',no:'no help'})[x.helped]})` : '')).join(', ')}`);
+    if(e && e.sleepHours !== undefined && e.sleepHours !== null) bits.push(`<b>Sleep before:</b> ${fmtSleep(e.sleepHours)}${e.sleepQuality ? ', ' + e.sleepQuality : ''}`);
+    if(m.weather) bits.push(`<b>Weather:</b> ${escapeHtml(wxSentence(m.weather))}`);
+    const tags = [...(m.triggers||[]), ...(m.aura||[]).map(a => a.split(' (')[0])].slice(0, 6);
+    const pain = (m.pain !== null && m.pain !== undefined) ? `<span class="m-badge ok" style="background:${painBg(m.pain)};color:${painInk(m.pain)}">${m.pain}/10</span>` : '';
+    list += `
+      <div class="entry-row m-row" data-m-open="${d}" role="button" tabindex="0">
+        <div class="top">
+          <div><span class="date">${fmtDate(d)}</span><span class="weekday">${fmtWeekday(d)}</span><span class="cycle-day">day ${cycleDayFor(d)}</span></div>
+          <div>${m.reviewed ? pain || '<span class="m-badge ok">Details added</span>' : '<span class="m-badge">Add details</span>'}</div>
+        </div>
+        ${bits.length ? `<div class="m-meta">${bits.join('<br>')}</div>` : '<div class="m-meta">No times or meds yet.</div>'}
+        ${tags.length ? `<div class="m-tagline">${tags.map(t => `<span>${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>`;
+  });
+
+  const painMeds = reliefMedChoices();
+  const classCard = `
+    <div class="card">
+      <details class="m-details">
+        <summary><span class="section-label" style="margin:0;">Medication types</span></summary>
+        <p class="hint" style="margin:8px 0 10px;">Used to count pain-reliever days for overuse. Guessed from the name. Fix anything that's wrong.</p>
+        ${painMeds.map(mm => `
+          <div class="m-class-row"><span>${escapeHtml(mm.label)}</span>
+            <select data-m-class="${mm.id}">${MED_CLASSES.map(c => `<option value="${c.id}" ${medClassOf(mm.id) === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}</select>
+          </div>`).join('')}
+      </details>
+    </div>`;
+
+  let savedRange = '90', reason = '';
+  try{ savedRange = window.localStorage.getItem('hem-mig-range') || '90'; reason = window.localStorage.getItem('hem-mig-reason') || ''; }catch(e){}
+  const exportCard = `
+    <div class="card">
+      <span class="section-label">Share with your neurologist</span>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">Migraine-only PDF: frequency, pain-reliever days, what helped and how fast, triggers, sleep, cycle timing, weather, and a dated log.</p>
+      ${DOCTOR_FIELDS.filter(fd => fd.key !== 'hem-doctor-notes').map(fd => `
+        <label class="doctor-field-label" for="m-${fd.key}">${fd.label}</label>
+        <textarea id="m-${fd.key}" class="doctor-reason" rows="${fd.rows}" data-doctor-key="${fd.key}" placeholder="${escapeHtml(fd.placeholder)}">${escapeHtml(readDoctorField(fd.key))}</textarea>`).join('')}
+      <label class="doctor-field-label" for="m-reason">Questions or reason for the visit (optional)</label>
+      <textarea id="m-reason" class="doctor-reason" rows="3" placeholder="e.g. Migraines more frequent since August. Asking about a preventive.">${escapeHtml(reason)}</textarea>
+      <select id="m-range" class="doctor-range">${M_RANGES.map(r => `<option value="${r.id}" ${r.id === savedRange ? 'selected' : ''}>${r.label}</option>`).join('')}</select>
+      <button class="primary doctor-btn" id="m-export-pdf">Create migraine report (PDF)</button>
+      <button type="button" class="secondary-btn mt" id="m-export-csv">Export migraine data (CSV)</button>
+    </div>`;
+
+  return `
+    ${renderStorageBanner()}
+    ${hero}
+    ${needs.length ? `<div class="banner nudge">${needs.length} migraine day${needs.length===1?' needs':'s need'} details. Tap one below${needs.length > 1 ? ', starting with whatever you remember best' : ''}.</div>` : ''}
+    ${renderMigraineCalendar(dates)}
+    ${noWx ? `<button type="button" class="secondary-btn" id="m-wx-backfill" style="margin-bottom:16px;" ${state.mWxBusy ? 'disabled' : ''}>${state.mWxBusy ? escapeHtml(state.mWxBusy) : `Add weather to ${noWx} migraine day${noWx===1?'':'s'}`}</button>` : ''}
+    ${list}
+    <div style="height:8px"></div>
+    ${exportCard}
+    ${classCard}
+  `;
+}
+
+function renderMigraine(){
+  if(state.mEditing && state.mForm) return renderMigraineForm();
+  return renderMigraineList();
+}
+
+function attachMigraineHandlers(){
+  const q = s => document.querySelectorAll(s);
+  q('[data-m-open]').forEach(el => {
+    el.addEventListener('click', () => { state.mFromHem = false; openMigraine(el.getAttribute('data-m-open')); });
+    el.addEventListener('keydown', ev => { if(ev.key === 'Enter' && el.classList.contains('m-row')) openMigraine(el.getAttribute('data-m-open')); });
+  });
+  q('[data-m-cal]').forEach(el => el.addEventListener('click', () => {
+    const ym = state.mCalMonth || todayISO().slice(0,7);
+    const [y, m] = ym.split('-').map(Number);
+    const d = new Date(y, m - 1 + Number(el.getAttribute('data-m-cal')), 1);
+    state.mCalMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    render();
+  }));
+  const wxBtn = document.getElementById('m-wx-backfill');
+  if(wxBtn) wxBtn.addEventListener('click', backfillMigraineWeather);
+  q('[data-m-class]').forEach(el => el.addEventListener('change', () => {
+    state.medClasses[el.getAttribute('data-m-class')] = el.value;
+    saveData();
+    render();
+  }));
+  const range = document.getElementById('m-range');
+  if(range) range.addEventListener('change', () => { try{ window.localStorage.setItem('hem-mig-range', range.value); }catch(e){} });
+  const reason = document.getElementById('m-reason');
+  if(reason) reason.addEventListener('input', () => { try{ window.localStorage.setItem('hem-mig-reason', reason.value); }catch(e){} });
+  const pdfBtn = document.getElementById('m-export-pdf');
+  if(pdfBtn) pdfBtn.addEventListener('click', exportMigraineReport);
+  const csvBtn = document.getElementById('m-export-csv');
+  if(csvBtn) csvBtn.addEventListener('click', exportMigraineCSV);
+
+  if(!state.mForm) return;
+  const f = state.mForm;
+  q('[data-m-chip]').forEach(el => el.addEventListener('click', ev => {
+    if(ev.target.closest('[data-m-remove-trigger]')) return;
+    const field = el.getAttribute('data-m-chip'), val = el.getAttribute('data-val');
+    if(field === 'regions-extra') mToggle('regions', val === 'Whole head' ? 'whole' : 'moves');
+    else mToggle(field, val);
+  }));
+  q('[data-m-relief]').forEach(el => el.addEventListener('click', () => {
+    const v = el.getAttribute('data-val').toLowerCase();
+    f.reliefLevel = f.reliefLevel === v ? '' : v;
+    if(f.reliefLevel && !f.reliefTime) f.reliefTime = hhmmNow();
+    render();
+  }));
+  q('[data-m-remove-trigger]').forEach(el => el.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const t = el.getAttribute('data-m-remove-trigger');
+    if(!confirm(`Remove "${t}" from your trigger options? Past migraines keep it.`)) return;
+    state.mCustomTriggers = state.mCustomTriggers.filter(x => x !== t);
+    saveData();
+    render();
+  }));
+  const addTrig = () => {
+    const inp = document.getElementById('m-new-trigger');
+    const t = (inp.value || '').trim();
+    if(!t) return;
+    const all = M_TRIGGERS.flatMap(g => g[1]).concat(state.mCustomTriggers);
+    const existing = all.find(x => x.toLowerCase() === t.toLowerCase());
+    const label = existing || (t.charAt(0).toUpperCase() + t.slice(1));
+    if(!existing) state.mCustomTriggers.push(label);
+    if(!f.triggers.includes(label)) f.triggers.push(label);
+    saveData();
+    render();
+  };
+  const addBtn = document.getElementById('m-add-trigger');
+  if(addBtn) addBtn.addEventListener('click', addTrig);
+  const newTrig = document.getElementById('m-new-trigger');
+  if(newTrig) newTrig.addEventListener('keydown', ev => { if(ev.key === 'Enter'){ ev.preventDefault(); addTrig(); } });
+  q('[data-m-pain]').forEach(el => el.addEventListener('click', () => {
+    const n = Number(el.getAttribute('data-m-pain'));
+    f.pain = f.pain === n ? null : n;
+    render();
+  }));
+  q('[data-m-region]').forEach(el => {
+    const go = () => mToggle('regions', el.getAttribute('data-m-region'));
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', ev => { if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); go(); } });
+  });
+  q('[data-m-input]').forEach(el => el.addEventListener('input', () => {
+    f[el.getAttribute('data-m-input')] = el.value;
+  }));
+  // Times re-render so the relief math and weather note update.
+  q('input[type="time"][data-m-input]').forEach(el => el.addEventListener('change', () => { f[el.getAttribute('data-m-input')] = el.value; render(); }));
+  q('[data-m-now]').forEach(el => el.addEventListener('click', () => { f[el.getAttribute('data-m-now')] = hhmmNow(); render(); }));
+  q('[data-m-toggle]').forEach(el => el.addEventListener('click', () => {
+    const k = el.getAttribute('data-m-toggle');
+    f[k] = !f[k];
+    if(k === 'continued' && f.continued) f.startTime = '';
+    if(k === 'ongoingNextDay' && f.ongoingNextDay) f.endTime = '';
+    render();
+  }));
+  q('[data-m-med]').forEach(el => el.addEventListener('change', () => {
+    const id = el.getAttribute('data-m-med');
+    f.medsExcluded = (f.medsExcluded||[]).filter(x => x !== id);
+    if(!el.checked) f.medsExcluded.push(id);
+    render();
+  }));
+  q('[data-m-helped]').forEach(el => el.addEventListener('click', () => {
+    const id = el.getAttribute('data-m-helped'), v = el.getAttribute('data-val');
+    f.medHelped = f.medHelped || {};
+    if(f.medHelped[id] === v) delete f.medHelped[id]; else f.medHelped[id] = v;
+    render();
+  }));
+  const wxRefresh = document.getElementById('m-wx-refresh');
+  if(wxRefresh) wxRefresh.addEventListener('click', async () => {
+    state.mWxForm = 'Getting weather…';
+    const keep = f.weather; f.weather = null; render();
+    try{ f.weather = await fetchMigraineWeather(f.date, f.startTime); state.mWxForm = ''; }
+    catch(e){ f.weather = keep; state.mWxForm = ''; alert("Couldn't get weather for that time."); }
+    render();
+  });
+  const editHem = document.getElementById('m-edit-hem');
+  if(editHem) editHem.addEventListener('click', () => {
+    // Keep what's been answered so far, then jump to the Hem day.
+    state.migraines[f.date] = {...f};
+    saveData();
+    const d = f.date;
+    state.mEditing = null; state.mForm = null; state.mFromHem = false;
+    editEntry(d);
+    window.scrollTo(0, 0);
+  });
+  const save = document.getElementById('m-save');
+  if(save) save.addEventListener('click', saveMigraine);
+  const cancel = document.getElementById('m-cancel');
+  if(cancel) cancel.addEventListener('click', closeMigraine);
+}
+
+// ---------- Export ----------
+function migraineSide(regions){
+  const r = regions || [];
+  const l = r.some(x => x.endsWith('-l')), rt = r.some(x => x.endsWith('-r'));
+  if(l && rt) return 'Both sides';
+  if(l) return 'Left side only';
+  if(rt) return 'Right side only';
+  if(r.length) return 'Whole head or center';
+  return '';
+}
+function countBy(list){
+  const c = {};
+  list.forEach(v => { if(v) c[v] = (c[v]||0) + 1; });
+  return Object.entries(c).sort((a,b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+}
+function buildMigraineData(rangeId){
+  const today = todayISO();
+  const allAsc = migraineDates().slice().reverse();
+  const start = rangeId === 'all' ? (allAsc[0] || today) : addDays(today, -(Number(rangeId) - 1));
+  const dates = allAsc.filter(d => d >= start && d <= today);
+  const rangeLabel = (M_RANGES.find(r => r.id === rangeId) || {}).label || '';
+  const spanDays = daysBetween(start, today) + 1;
+  const recs = dates.map(d => ({d, e: entryFor(d), m: migraineFor(d)}));
+  const n = recs.length;
+  const episodes = groupEpisodes(dates);
+  const durations = episodes.map(ep => ep.mins).filter(x => x !== null);
+  const pains = recs.map(r => r.m.pain).filter(p => p !== null && p !== undefined);
+
+  // Pain-reliever days by calendar month (all Hem days).
+  const months = [];
+  let cur = start.slice(0,7);
+  while(cur <= today.slice(0,7)){
+    months.push(cur);
+    const [y, m] = cur.split('-').map(Number);
+    const nx = new Date(y, m, 1);
+    cur = `${nx.getFullYear()}-${String(nx.getMonth()+1).padStart(2,'0')}`;
+  }
+  const monthRows = months.map(ym => {
+    const s = ym + '-01' < start ? start : ym + '-01';
+    const [y, m] = ym.split('-').map(Number);
+    const endD = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`;
+    const e = endD > today ? today : endD;
+    const rc = rescueCounts(s, e);
+    const partial = s !== ym + '-01' || e !== endD;
+    return [fmtMonthHeader(ym + '-01') + (partial ? ' (partial)' : ''), String(dates.filter(d => d.startsWith(ym)).length), String(rc.any), String(rc.ten), String(rc.simple), RESCUE_STATUS[rc.status]];
+  });
+
+  // Medication response
+  const medStats = {};
+  recs.forEach(({d, m}) => {
+    const meds = migraineMeds(d, m).filter(x => x.included);
+    meds.forEach(x => {
+      const s = medStats[x.id] || (medStats[x.id] = {label:x.label, n:0, yes:0, some:0, no:0, ttr:[]});
+      s.n++;
+      if(x.helped) s[x.helped]++;
+    });
+    const firstTimed = meds.find(x => x.time);
+    if(firstTimed && m.reliefTime){
+      const diff = toMin(m.reliefTime) - toMin(firstTimed.time);
+      if(diff >= 0) medStats[firstTimed.id].ttr.push(diff);
+    }
+  });
+  const medRows = Object.entries(medStats).sort((a,b) => b[1].n - a[1].n).map(([id, s]) => {
+    const rated = s.yes + s.some + s.no;
+    return [s.label, (MED_CLASSES.find(c => c.id === medClassOf(id))||{}).label || '', String(s.n),
+      rated ? `${s.yes} yes / ${s.some} some / ${s.no} no` : 'not rated',
+      s.ttr.length ? `${fmtMins(median(s.ttr))} (n=${s.ttr.length})` : ''];
+  });
+
+  const pct = c => n ? `${Math.round(c/n*100)}%` : '';
+  const triggerRows = countBy(recs.flatMap(r => r.m.triggers||[])).map(([k,c]) => [k, String(c), pct(c)]);
+  const featureRows = [
+    ...countBy(recs.map(r => migraineSide(r.m.regions))).map(([k,c]) => ['Side', k, String(c), pct(c)]),
+    ...countBy(recs.flatMap(r => (r.m.regions||[]).filter(x => !['whole','moves'].includes(x)).map(x => { const t = M_REGIONS[x].replace(/^(Left|Right) /,'').replace(/^Behind (left|right) eye$/,'Behind eye'); return t.charAt(0).toUpperCase() + t.slice(1); }))).map(([k,c]) => ['Location', k, String(c), pct(c)]),
+    ...countBy(recs.flatMap(r => r.m.quality||[])).map(([k,c]) => ['Quality', k, String(c), pct(c)]),
+    ...countBy(recs.flatMap(r => r.m.aura||[])).map(([k,c]) => ['Aura', k, String(c), pct(c)]),
+    ...countBy(recs.flatMap(r => r.m.symptoms||[])).map(([k,c]) => ['Symptom', k, String(c), pct(c)]),
+    ...countBy(recs.flatMap(r => [...(r.m.places||[]), r.m.placeOther ? r.m.placeOther.trim() : ''])).map(([k,c]) => ['Where', k, String(c), pct(c)])
+  ];
+  const auraCount = recs.filter(r => (r.m.aura||[]).length).length;
+
+  // Cycle (estimated)
+  const cds = recs.map(r => cycleDayFor(r.d));
+  const peri = cds.filter(cd => cd >= state.cycleLength - 1 || cd <= 3).length;
+
+  // Sleep: night before migraine days vs every logged night in range
+  const sleepAll = state.entries.filter(e => e.date >= start && e.date <= today && e.sleepHours !== undefined && e.sleepHours !== null).map(e => Number(e.sleepHours));
+  const sleepMig = recs.filter(r => r.e && r.e.sleepHours !== undefined && r.e.sleepHours !== null).map(r => Number(r.e.sleepHours));
+  const avg = a => a.length ? a.reduce((x,y) => x+y, 0) / a.length : null;
+  const poorBefore = recs.filter(r => r.e && r.e.sleepQuality === 'poor').length;
+  const shortBefore = sleepMig.filter(h => h < 6).length;
+
+  // Weather
+  const wx = recs.map(r => r.m.weather).filter(Boolean);
+  const falling = wx.filter(w => wxTrend(w) === 'fall').length;
+  const changes = wx.map(w => w.change24).filter(c => c !== null && c !== undefined);
+
+  const impactRows = countBy(recs.flatMap(r => r.m.impact||[])).map(([k,c]) => [k, String(c)]);
+  const hoursLost = recs.reduce((a, r) => a + (parseFloat(r.m.hoursLost) || 0), 0);
+
+  const logRows = [...recs].reverse().map(({d, e, m}) => {
+    const times = [];
+    if(m.continued) times.push('cont. from prev day');
+    else if(m.startTime) times.push('start ' + fmtTime(m.startTime));
+    if(m.ongoingNextDay) times.push('past midnight');
+    else if(m.endTime) times.push('end ' + fmtTime(m.endTime));
+    const meds = migraineMeds(d, m).filter(x => x.included).map(x => x.label + (x.time ? ' ' + fmtTime(x.time) : '') + (x.helped ? ` (${({yes:'helped',some:'some',no:'no help'})[x.helped]})` : '')).join('; ');
+    const relief = m.reliefTime ? fmtTime(m.reliefTime) + (m.reliefLevel ? ' ' + m.reliefLevel : '') : '';
+    const pain = (m.pain !== null && m.pain !== undefined) ? `${m.pain}/10` : ((e && (e.severity||{}).migraine) || '');
+    const loc = [migraineSide(m.regions), ...(m.aura||[]).length ? ['aura'] : []].filter(Boolean).join(', ');
+    const sleep = e && e.sleepHours !== undefined && e.sleepHours !== null ? fmtSleep(e.sleepHours) + (e.sleepQuality ? ' ' + e.sleepQuality : '') : (e && e.sleepQuality) || '';
+    return [fmtDateLong(d), String(cycleDayFor(d)), times.join(', '), pain, loc, meds, relief, (m.triggers||[]).join(', '), sleep];
+  });
+
+  return {start, end: today, rangeLabel, spanDays, n, episodes: episodes.length, per30: n ? (n / spanDays * 30) : 0,
+    avgPain: pains.length ? avg(pains) : null, painN: pains.length, medDur: median(durations), durN: durations.length,
+    monthRows, medRows, triggerRows, featureRows, auraCount, peri, cds,
+    avgSleepAll: avg(sleepAll), avgSleepMig: avg(sleepMig), sleepMigN: sleepMig.length, poorBefore, shortBefore,
+    wxN: wx.length, falling, medChange: median(changes), impactRows, hoursLost, reviewed: recs.filter(r => r.m.reviewed).length, logRows};
+}
+
+async function exportMigraineReport(){
+  const btn = document.getElementById('m-export-pdf');
+  const rangeId = (document.getElementById('m-range') || {}).value || '90';
+  const reason = ((document.getElementById('m-reason') || {}).value || '').trim();
+  try{ window.localStorage.setItem('hem-mig-range', rangeId); }catch(e){}
+  const data = buildMigraineData(rangeId);
+  if(!data.n){ alert('No migraine days in that range. Try a longer range.'); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Building PDF...'; }
+  let jsPDF;
+  try{ jsPDF = await loadPDF(); }
+  catch(e){
+    alert("Couldn't load the PDF tool. Check your connection and try again.");
+    if(btn){ btn.disabled = false; btn.textContent = 'Create migraine report (PDF)'; }
+    return;
+  }
+  const doc = new jsPDF({unit:'pt', format:'letter'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const M = 48;
+  const ink = [43,40,34], soft = [107,101,88], plum = [107,76,107], line = [221,214,200];
+  let y = M;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...ink);
+  doc.text('Migraine Summary', M, y);
+  y += 18;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...soft);
+  doc.text(pdfText(`${fmtDateLong(data.start)} - ${fmtDateLong(data.end)}  (${data.rangeLabel})  |  Generated ${fmtDateLong(todayISO())}`), M, y);
+  y += 10;
+  doc.setDrawColor(...line); doc.setLineWidth(0.75); doc.line(M, y, W - M, y);
+  y += 20;
+
+  if(reason){
+    doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
+    const lines = doc.splitTextToSize(pdfText(reason), W - 2*M - 24);
+    const boxH = 30 + lines.length * 13;
+    doc.setFillColor(243,237,243); doc.roundedRect(M, y, W - 2*M, boxH, 5, 5, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...plum);
+    doc.text('QUESTIONS / REASON FOR VISIT', M + 12, y + 16);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(...ink);
+    doc.text(lines, M + 12, y + 31);
+    y += boxH + 14;
+  }
+  const background = DOCTOR_FIELDS.filter(fd => fd.key !== 'hem-doctor-notes').map(fd => [fd.label, readDoctorField(fd.key).trim()]).filter(([,v]) => v);
+  if(background.length){
+    doc.autoTable({startY: y, margin:{left:M, right:M}, theme:'plain',
+      body: background.map(([k,v]) => [pdfText(k), pdfText(v)]),
+      styles:{font:'helvetica', fontSize:10, textColor:ink, cellPadding:{top:3,bottom:3,left:0,right:6}, valign:'top'},
+      columnStyles:{0:{cellWidth:150, fontStyle:'bold', textColor:soft}}});
+    y = doc.lastAutoTable.finalY + 14;
+  }
+
+  const tiles = [
+    ['Migraine days', String(data.n)],
+    ['Per 30 days', data.per30.toFixed(1)],
+    ['Avg peak pain', data.avgPain !== null ? data.avgPain.toFixed(1) + '/10' : '-'],
+    ['Median duration', data.medDur !== null ? fmtMins(data.medDur) : '-']
+  ];
+  const tileW = (W - 2*M - 3*10) / 4;
+  tiles.forEach(([label, val], i) => {
+    const x = M + i*(tileW + 10);
+    doc.setFillColor(246,243,236); doc.roundedRect(x, y, tileW, 46, 5, 5, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(...ink);
+    doc.text(val, x + 10, y + 21);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...soft);
+    doc.text(label, x + 10, y + 36);
+  });
+  y += 58;
+  const metaBits = [];
+  if(data.episodes !== data.n) metaBits.push(`${data.n} migraine days make up ${data.episodes} separate migraines (some lasted overnight).`);
+  if(data.painN < data.n) metaBits.push(`Pain score recorded on ${data.painN} of ${data.n} days.`);
+  if(data.durN) metaBits.push(`Duration based on ${data.durN} migraine${data.durN===1?'':'s'} with start and end times.`);
+  if(data.auraCount) metaBits.push(`Aura on ${data.auraCount} of ${data.n} migraine days.`); else if(data.reviewed) metaBits.push('No aura recorded on days with details.');
+  if(data.hoursLost) metaBits.push(`About ${Math.round(data.hoursLost*10)/10} hours lost in total.`);
+  if(metaBits.length){
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...soft);
+    const ml = doc.splitTextToSize(pdfText(metaBits.join(' ')), W - 2*M);
+    doc.text(ml, M, y);
+    y += ml.length * 11 + 14;
+  }
+
+  const heading = (t) => {
+    if(y > H - 90){ doc.addPage(); y = M; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...plum);
+    doc.text(t, M, y); y += 8;
+  };
+  const note = (t) => {
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...soft);
+    const nl = doc.splitTextToSize(pdfText(t), W - 2*M);
+    if(y + nl.length * 11 > H - 50){ doc.addPage(); y = M; }
+    doc.text(nl, M, y);
+    y += nl.length * 11 + 14;
+  };
+  const tableStyle = {
+    margin: {left:M, right:M},
+    styles: {font:'helvetica', fontSize:9, textColor:ink, cellPadding:4, lineColor:line, lineWidth:0.5, valign:'top', overflow:'linebreak'},
+    headStyles: {fillColor:[239,234,224], textColor:ink, fontStyle:'bold'},
+    alternateRowStyles: {fillColor:[251,249,244]},
+    theme: 'grid'
+  };
+  const after = () => { y = doc.lastAutoTable.finalY + 22; };
+  const clean = rows => rows.map(r => r.map(pdfText));
+
+  heading('Pain-reliever days per month (medication overuse check)');
+  doc.autoTable({...tableStyle, startY: y,
+    head: [['Month','Migraine days','Any pain reliever','Triptan / combo / opioid','Simple analgesic','Status']],
+    body: clean(data.monthRows),
+    columnStyles: {0:{fontStyle:'bold'}, 1:{halign:'center'}, 2:{halign:'center'}, 3:{halign:'center'}, 4:{halign:'center'}},
+    didParseCell: h => { if(h.section === 'body' && h.column.index === 5){ if(h.cell.raw === RESCUE_STATUS.over){ h.cell.styles.textColor = [140,74,91]; h.cell.styles.fontStyle = 'bold'; } else if(h.cell.raw === RESCUE_STATUS.warn) h.cell.styles.textColor = [138,91,28]; } }
+  });
+  after();
+  note('Counts every logged day with that kind of medication, not only migraine days. Overuse range: 10+ days/month of triptans, combination analgesics, opioids or ergots, or 15+ days/month of simple analgesics (ibuprofen, naproxen, acetaminophen, aspirin). Days with no meds logged count as none.');
+
+  if(data.medRows.length){
+    heading('Medications taken for migraine');
+    doc.autoTable({...tableStyle, startY: y,
+      head: [['Medication','Type','Migraine days','Did it help?','Median time to relief']],
+      body: clean(data.medRows), columnStyles: {0:{fontStyle:'bold'}, 2:{halign:'center'}}});
+    after();
+    note('Time to relief is measured from the first dose that day to when relief was first noticed.');
+  }
+
+  if(data.triggerRows.length){
+    heading('Suspected triggers');
+    doc.autoTable({...tableStyle, startY: y, head: [['Trigger','Migraine days','% of migraine days']],
+      body: clean(data.triggerRows), columnStyles: {1:{halign:'center'}, 2:{halign:'center'}}});
+    after();
+  }
+
+  if(data.featureRows.length){
+    heading('What the migraines are like');
+    doc.autoTable({...tableStyle, startY: y, head: [['','Detail','Days','%']],
+      body: clean(data.featureRows), columnStyles: {0:{fontStyle:'bold', cellWidth:70, textColor:soft}, 2:{halign:'center', cellWidth:50}, 3:{halign:'center', cellWidth:50}}});
+    after();
+  }
+
+  heading('Sleep, cycle and weather');
+  const ctx = [];
+  if(data.sleepMigN){
+    ctx.push(['Sleep the night before', `Avg ${fmtSleep(Math.round(data.avgSleepMig*100)/100)} before migraine days (n=${data.sleepMigN})` + (data.avgSleepAll !== null ? ` vs ${fmtSleep(Math.round(data.avgSleepAll*100)/100)} across all logged nights` : '') + `. Under 6h before ${data.shortBefore}; rated poor before ${data.poorBefore}.`]);
+  } else ctx.push(['Sleep the night before', 'Not logged for these days.']);
+  ctx.push(['Est. cycle day', `${data.peri} of ${data.n} fell within 2 days before to 3 days after est. day 1. Cycle days: ${[...data.cds].sort((a,b)=>a-b).join(', ')}.`]);
+  if(data.wxN){
+    ctx.push(['Barometric pressure', `Falling (3+ hPa drop in the prior 24h) at start on ${data.falling} of ${data.wxN} days with weather.` + (data.medChange !== null ? ` Median 24h change ${data.medChange > 0 ? '+' : ''}${data.medChange.toFixed(1)} hPa.` : '')]);
+  }
+  if(data.impactRows.length) ctx.push(['Impact', data.impactRows.map(([k,c]) => `${k}: ${c}`).join('; ') + '.']);
+  doc.autoTable({startY: y, margin:{left:M, right:M}, theme:'plain', body: clean(ctx),
+    styles:{font:'helvetica', fontSize:9.5, textColor:ink, cellPadding:{top:3,bottom:4,left:0,right:6}, valign:'top'},
+    columnStyles:{0:{cellWidth:130, fontStyle:'bold', textColor:soft}}});
+  y = doc.lastAutoTable.finalY + 10;
+  note(`Cycle days are estimates from a ${state.cycleLength}-day cycle counted from ${fmtDateLong(getAnchorDate())}, not recorded period dates. Weather is from Open-Meteo for the start hour (noon if no start time).`);
+
+  heading('Migraine log (most recent first)');
+  doc.autoTable({...tableStyle, startY: y,
+    head: [['Date','Cycle day','Timing','Pain','Side / aura','Meds (time, response)','Relief','Triggers','Sleep before']],
+    body: clean(data.logRows), showHead: 'everyPage',
+    styles: {...tableStyle.styles, fontSize:7.5, cellPadding:3},
+    columnStyles: {0:{cellWidth:58}, 1:{halign:'center', cellWidth:32}, 2:{cellWidth:62}, 3:{cellWidth:34, halign:'center'}, 4:{cellWidth:48}, 5:{cellWidth:90}, 6:{cellWidth:44}, 7:{cellWidth:85}}});
+
+  const pages = doc.internal.getNumberOfPages();
+  for(let i = 1; i <= pages; i++){
+    doc.setPage(i);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...soft);
+    doc.text('Self-reported migraine log. Counts and patterns are descriptive, not a diagnosis.', M, H - 24);
+    doc.text(`Page ${i} of ${pages}`, W - M, H - 24, {align:'right'});
+  }
+
+  const filename = `Migraine-Summary-${data.start}-to-${data.end}.pdf`;
+  const blob = doc.output('blob');
+  let shared = false;
+  try{
+    const file = new File([blob], filename, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'Migraine summary'});
+      shared = true;
+    }
+  }catch(e){ if(e && e.name === 'AbortError') shared = true; }
+  if(!shared){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  if(btn){ btn.disabled = false; btn.textContent = 'Create migraine report (PDF)'; }
+}
+
+function exportMigraineCSV(){
+  const rangeId = (document.getElementById('m-range') || {}).value || '90';
+  const data = buildMigraineData(rangeId);
+  const dates = migraineDates().slice().reverse().filter(d => d >= data.start);
+  if(!dates.length){ alert('No migraine days in that range.'); return; }
+  const rows = [['Date','Weekday','Est. cycle day','Continued from previous day','Start','End','Past midnight','Relief noticed','Relief level','Hem severity','Peak pain (0-10)','Pain location','Side','Pain quality','Where','Aura','Symptoms','Triggers','Meds for migraine (time, helped)','Meds unchecked','Sleep night before','Sleep quality','Pressure (inHg)','24h pressure change (hPa)','Temp (F)','Humidity (%)','Conditions','Impact','Hours lost','Notes','Hem notes']];
+  dates.forEach(d => {
+    const e = entryFor(d), m = migraineFor(d);
+    const meds = migraineMeds(d, m);
+    const w = m.weather;
+    rows.push([d, fmtWeekday(d), cycleDayFor(d), m.continued ? 'Yes' : '', m.startTime ? fmtTime(m.startTime) : '', m.endTime ? fmtTime(m.endTime) : '', m.ongoingNextDay ? 'Yes' : '',
+      m.reliefTime ? fmtTime(m.reliefTime) : '', m.reliefLevel || '', (e && (e.severity||{}).migraine) || '', (m.pain === null || m.pain === undefined) ? '' : m.pain,
+      (m.regions||[]).map(x => M_REGIONS[x]).join('; '), migraineSide(m.regions), (m.quality||[]).join('; '),
+      [...(m.places||[]), m.placeOther].filter(Boolean).join('; '), (m.aura||[]).join('; '), (m.symptoms||[]).join('; '), (m.triggers||[]).join('; '),
+      meds.filter(x => x.included).map(x => x.label + (x.time ? ' ' + fmtTime(x.time) : '') + (x.helped ? ` (${x.helped})` : '')).join('; '),
+      meds.filter(x => !x.included).map(x => x.label).join('; '),
+      e && e.sleepHours !== undefined && e.sleepHours !== null ? fmtSleep(e.sleepHours) : '', (e && e.sleepQuality) || '',
+      w ? inHg(w.pressure) : '', w && w.change24 !== null && w.change24 !== undefined ? w.change24 : '', w ? Math.round(w.temp) : '', w ? Math.round(w.humidity) : '', w ? wxLabel(w.code) : '',
+      (m.impact||[]).join('; '), m.hoursLost || '', (m.notes||'').replace(/\n/g,' '), ((e && e.notes) || '').replace(/\n/g,' ')]);
+  });
+  const csv = rows.map(r => r.map(f => '"' + String(f).replace(/"/g,'""') + '"').join(',')).join('\n');
+  triggerDownload(csv, `migraines-${data.start}-to-${data.end}.csv`, 'text/csv');
+}
+
 function escapeHtml(str){
   return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function render(){
   document.getElementById('today-label').textContent = new Date().toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric', year:'numeric'});
-  ['log','history','patterns'].forEach(v => {
+  const mig = state.view === 'migraine';
+  document.getElementById('page-title').textContent = mig ? 'Brainstorm' : 'Symptom log';
+  document.getElementById('page-eyebrow').textContent = mig ? 'Hem · Migraine' : 'Hem';
+  ['log','history','patterns','migraine'].forEach(v => {
     document.getElementById('tab-'+v).classList.toggle('active', state.view === v);
   });
   const main = document.getElementById('main');
@@ -2759,8 +3962,10 @@ function render(){
   }
   if(state.view === 'log') main.innerHTML = renderLog();
   else if(state.view === 'history') main.innerHTML = renderHistory();
+  else if(state.view === 'migraine') main.innerHTML = renderMigraine();
   else main.innerHTML = renderPatterns();
   attachHandlers();
+  attachMigraineHandlers();
 }
 
 function attachHandlers(){
