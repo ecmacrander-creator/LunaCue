@@ -71,6 +71,18 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 12px;min-width:0}
 .stat .k{font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}
 .stat .v{font-family:var(--font-display);font-size:1.05rem;font-variant-numeric:tabular-nums;margin-top:4px}
+.goal{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:6px}
+.goal i{display:block;height:100%;width:0;background:var(--accent)}
+.goal.met i{background:var(--ok)}
+.gk{font-size:.66rem;font-weight:800;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+.btn.small{font-size:.76rem;padding:12px 6px}
+.note{color:var(--muted);font-weight:700;font-size:.85rem;margin:0}
+.code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.82rem;background:var(--bg);border:1.5px dashed var(--line);border-radius:10px;padding:10px;word-break:break-all;user-select:all;-webkit-user-select:all}
+.wear{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.wchip{font:inherit;font-weight:800;font-size:.82rem;padding:10px 8px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.wchip small{font-weight:700;color:var(--muted);font-size:.7rem}
+.wchip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.wchip:disabled{opacity:.5;cursor:default}
 .care,.actions{display:flex;gap:8px}
 .btn{flex:1;font-family:var(--font-display);font-size:.88rem;border-radius:16px;padding:13px 10px;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -118,7 +130,7 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
 <div class="app">
   <header>
     <div><h1>SitStay</h1><div class="date" id="today"></div></div>
-    <div class="top"><button class="link" id="openPush">Reminders</button><button class="link" id="openGraves">Graveyard</button></div>
+    <div class="top"><button class="link" id="openSettings">Settings</button><button class="link" id="openGraves">Graveyard</button></div>
   </header>
 
   <div class="shell">
@@ -134,7 +146,7 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
   <div class="acts" id="acts" role="group" aria-label="Today's enrichment activities"></div>
 
   <div class="stats">
-    <div class="stat"><div class="k">Focus today</div><div class="v" id="statFocus">0m</div></div>
+    <div class="stat"><div class="k">Focus today</div><div class="v" id="statFocus">0m</div><div class="goal" id="goalBar"><i id="goalFill"></i></div><div class="gk" id="goalText">Goal 4h</div></div>
     <div class="stat"><div class="k">This stretch</div><div class="v" id="statStretch">0:00</div></div>
     <div class="stat"><div class="k">Times left</div><div class="v" id="statLeft">0</div></div>
   </div>
@@ -142,6 +154,7 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
   <div class="care">
     <button class="btn" id="feed" disabled>Feed</button>
     <button class="btn" id="clean" disabled>Clean up</button>
+    <button class="btn" id="free" disabled>Free break</button>
   </div>
   <div class="actions">
     <button class="btn primary" id="primary">Start day</button>
@@ -189,6 +202,27 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
   </div>
 </div>
 
+<div class="sheet" id="settings" hidden>
+  <div class="card" role="dialog" aria-labelledby="setTitle">
+    <h2 id="setTitle">Settings</h2>
+    <p class="sub">Daily focus goal</p>
+    <label for="goalInput">Hours of focus per day<input id="goalInput" type="number" min="0.5" max="12" step="0.5" inputmode="decimal"></label>
+    <p class="sub">Reminders</p>
+    <p class="note" id="pushNote"></p>
+    <button class="btn" id="pushBtn">Turn on reminders</button>
+    <p class="sub">Accessories</p>
+    <p class="note">Bort unlocks one at each dog-year milestone. Tap to wear it, tap again to take it off.</p>
+    <div class="wear" id="wearList"></div>
+    <p class="sub">Backup</p>
+    <p class="note" id="backupNote"></p>
+    <div class="code" id="backupCode"></div>
+    <button class="btn" id="copyCode">Copy backup code</button>
+    <label for="restoreInput">Restore from a backup code<input id="restoreInput" autocomplete="off" spellcheck="false" placeholder="Paste a backup code"></label>
+    <button class="btn" id="restoreBtn">Restore</button>
+    <div class="actions"><button class="btn primary" id="setDone">Done</button></div>
+  </div>
+</div>
+
 <div class="sheet" id="graves" hidden>
   <div class="card" role="dialog" aria-labelledby="gravesTitle">
     <h2 id="gravesTitle">Graveyard</h2>
@@ -204,6 +238,8 @@ const $ = s => document.querySelector(s);
 const KEY = 'sitstay.v1';
 let PUP = 'Bort';
 const DAY = 86400000;
+const FREE = 15 * 60000;
+const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat', age:3}, {id:'shades', name:'Sunglasses', age:5}, {id:'crown', name:'Crown', age:10}, {id:'tophat', name:'Top hat', age:25}];
 const GRACE = 10000;
 const GOAL = 30 * 60000;
 const MIN = 60000;
@@ -235,11 +271,25 @@ const between = (a,b) => (a + Math.random()*(b-a)) * MIN;
 
 /* ---------- storage ---------- */
 function newPet(name){ const now = Date.now(); return {name:name, born:now, age:0, lastAgedKey:null, lastFed:now, vetLeft:3, dead:false, diedAt:0}; }
-function blank(){ return {days:{}, mode:'idle', day:null, lastTick:0, hiddenAt:0, activity:null, pet:newPet('Bort'), graveyard:[]}; }
+function newId(){ try{ return crypto.randomUUID(); }catch(e){ return 'x'.repeat(8).replace(/x/g, () => Math.random().toString(36).slice(2,6)); } }
+function blank(){ return {days:{}, mode:'idle', day:null, lastTick:0, hiddenAt:0, activity:null, pet:newPet('Bort'), graveyard:[], goalMin:240, freeStart:0, backupId:newId(), lastBackup:0}; }
 function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.days) return Object.assign(blank(), s); }catch(e){} return blank(); }
 let store = load();
+if(!store.backupId) store.backupId = newId();
+if(!store.goalMin) store.goalMin = 240;
 PUP = store.pet.name;
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+let cloudT = 0;
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} if(window.SITSTAY_CONFIG){ clearTimeout(cloudT); cloudT = setTimeout(() => cloudSave(false), 15000); } }
+function backupData(){ const c = Object.assign({}, store); delete c.push; delete c.hiddenAt; return c; }
+async function cloudSave(keep){
+  const cfg = window.SITSTAY_CONFIG; if(!cfg || !store.backupId) return;
+  try{
+    const r = await fetch(cfg.SUPABASE_URL + '/rest/v1/rpc/sitstay_backup', {method:'POST', keepalive:!!keep,
+      headers:{'Content-Type':'application/json', apikey:cfg.SUPABASE_ANON_KEY, Authorization:'Bearer ' + cfg.SUPABASE_ANON_KEY},
+      body:JSON.stringify({p_id:store.backupId, p_data:backupData()})});
+    if(r.ok){ store.lastBackup = Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  }catch(e){}
+}
 function keyOf(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function todayKey(){ return keyOf(new Date()); }
 function day(k){
@@ -260,6 +310,7 @@ function canClean(){ const d = day(); return d.poops > 0 && (store.mode !== 'pla
 function fmt(ms){ const m = Math.floor(ms/MIN), h = Math.floor(m/60); return h ? h+'h '+(m%60)+'m' : m+'m'; }
 function fmtClock(ms){ const t = Math.floor(ms/1000), h = Math.floor(t/3600), m = Math.floor(t/60)%60, s = t%60;
   return h ? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0'); }
+const fmtGoal = m => Math.floor(m/60)+'h'+(m%60 ? ' '+(m%60)+'m' : '');
 const plural = (n, u) => n + ' ' + (n === 1 ? u[0] : u[1]);
 
 /* ---------- wake lock ---------- */
@@ -272,7 +323,7 @@ const A = {t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, par
 
 function rollover(){
   if(store.day && store.day !== todayKey()){
-    if(store.mode === 'playing' || store.mode === 'break'){ const old = day(store.day); old.ended = true; old.streakMs = 0; ageUp(store.day); }
+    if(store.mode === 'playing' || store.mode === 'break' || store.mode === 'free'){ const old = day(store.day); old.ended = true; old.streakMs = 0; ageUp(store.day); }
     store.mode = 'idle'; store.day = todayKey(); store.activity = null; releaseWake(); save(); buildCards(); render();
   }
 }
@@ -285,7 +336,8 @@ function registerAway(away, now){
 function tick(now){
   rollover();
   checkDeath(now);
-  if(store.mode === 'playing' || store.mode === 'break'){
+  if(store.mode === 'free' && document.visibilityState === 'visible' && now >= store.freeStart + FREE) endFree(now, false);
+  if(store.mode === 'playing' || store.mode === 'break' || store.mode === 'free'){
     const d = day();
     if(!d.hungry && d.nextHunger && now >= d.nextHunger){ d.hungry = true; d.nextHunger = 0; showToast(PUP+' is hungry for lunch. Tap Feed.'); save(); }
   }
@@ -297,6 +349,7 @@ function tick(now){
       d.focusMs += dt; d.streakMs += dt; if(d.streakMs > d.longestMs) d.longestMs = d.streakMs;
       d.actMs[a] = (d.actMs[a] || 0) + dt;
       if(d.hungry) d.unfedMs += dt;
+      if(!d.goalMet && d.focusMs >= store.goalMin*MIN){ d.goalMet = true; showToast('Daily goal met: '+fmt(d.focusMs)+' of focus.'); save(); }
       if(d.focusMs >= d.nextPoop){
         d.nextPoop = d.focusMs + between(20,40);
         if(d.poops < 3){ d.poops++; A.poopStart = now; A.poopUntil = now + 1800; showToast(PUP+' pooped. Clean it up when this activity is done.'); save(); }
@@ -313,26 +366,50 @@ function tick(now){
 }
 document.addEventListener('visibilitychange', () => {
   const now = Date.now();
+  if(store.mode === 'free'){
+    if(document.visibilityState === 'visible'){ lastFrame = 0; if(now >= store.freeStart + FREE) endFree(now, true); render(); }
+    return;
+  }
   if(store.mode !== 'playing') return;
-  if(document.visibilityState === 'hidden'){ store.hiddenAt = now; save(); }
-  else {
+  if(document.visibilityState === 'hidden'){
+    store.hiddenAt = now; save();
+    ping('away', now + 3*MIN, PUP+' is waiting by the door. Come back to keep your streak going.');
+  } else {
     const away = now - (store.hiddenAt || store.lastTick);
     if(away > GRACE) registerAway(away, now);
     store.lastTick = now; store.hiddenAt = 0; lastFrame = 0;
+    ping('away', 0, '');
     requestWake(); save(); render();
   }
 });
-window.addEventListener('pagehide', () => { if(store.mode === 'playing') store.hiddenAt = Date.now(); save(); });
+window.addEventListener('pagehide', () => { if(store.mode === 'playing') store.hiddenAt = Date.now(); save(); cloudSave(true); });
 
 function startDay(){
   if(store.pet.dead){ openDead(); return; }
   const d = day(); store.day = todayKey(); store.mode = 'playing';
   if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; showToast(PUP+' wants breakfast. Tap Feed.'); }
+  d.sessions = (d.sessions || 0) + 1;
   d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
 }
-function takeBreak(){ store.mode = 'break'; releaseWake(); save(); render(); }
-function backToWork(){ store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
-function endDay(){ ageUp(todayKey()); const d = day(); d.ended = true; d.streakMs = 0; store.mode = 'ended'; releaseWake(); save(); render(); openSummary(); }
+function takeBreak(){
+  if(store.mode === 'free') ping('free', 0, '');
+  const d = day(); d.streakMs = 0; store.mode = 'break'; releaseWake(); ping('away', 0, ''); save(); render();
+  showToast('Focus session ended. Start another one when you are ready.');
+}
+function backToWork(){ const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
+function startFree(){
+  const d = day(); if(store.mode !== 'playing' || d.freeUsed) return;
+  d.freeUsed = true; store.mode = 'free'; store.freeStart = Date.now(); releaseWake();
+  ping('free', store.freeStart + FREE, 'Free break is over. '+PUP+' is ready to get back to work.');
+  save(); render(); showToast('Free break: 15 minutes. Leaving the app is fine.');
+}
+function endFree(now, returning){
+  const over = now - (store.freeStart + FREE);
+  store.mode = 'playing'; store.lastTick = now; store.hiddenAt = 0; ping('free', 0, '');
+  if(returning && over > GRACE) registerAway(over, now); else showToast('Free break is over. Back to it.');
+  requestWake(); save(); render();
+}
+function endDay(){ if(store.mode === 'free') ping('free', 0, ''); ping('away', 0, ''); ageUp(todayKey()); const d = day(); d.ended = true; d.streakMs = 0; store.mode = 'ended'; releaseWake(); save(); render(); openSummary(); }
 function resumeDay(){ const d = day(); d.ended = false; store.mode = 'playing'; store.day = todayKey(); store.lastTick = Date.now(); requestWake(); save(); closeSheet('#summary'); render(); }
 function setActivity(a){ store.activity = a; A.t = 0; A.lastCycle = 0; save(); render(); }
 function feed(){
@@ -341,14 +418,14 @@ function feed(){
   const now = Date.now(); A.eatStart = now; A.eatUntil = now + 3000; save(); render();
 }
 function dayComplete(d){ return !!d && d.acts.every(a => d.done[a]); }
-function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key || !dayComplete(store.days[key])) return; pt.age++; pt.lastAgedKey = key; save(); }
+function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key || !dayComplete(store.days[key])) return; pt.age++; pt.lastAgedKey = key; const w = WEAR.find(x => x.age === pt.age); if(w) setTimeout(() => showToast(pt.name+' unlocked the '+w.name+'. Put it on in Settings.'), 4800); save(); }
 const yrs = n => n + (n === 1 ? ' dog year' : ' dog years');
 const shortDate = t => new Date(t).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
 function checkDeath(now){
   const pt = store.pet;
   if(pt.dead || now - pt.lastFed <= 3*DAY) return;
   pt.dead = true; pt.diedAt = pt.lastFed + 3*DAY;
-  if(store.mode === 'playing' || store.mode === 'break'){ const d = day(); d.ended = true; d.streakMs = 0; }
+  if(store.mode === 'playing' || store.mode === 'break' || store.mode === 'free'){ const d = day(); d.ended = true; d.streakMs = 0; }
   store.mode = 'idle'; releaseWake(); save(); render(); openDead();
 }
 function openDead(){
@@ -401,13 +478,13 @@ async function enablePush(){
     if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToBytes(CFG.VAPID_PUBLIC_KEY)});
     store.push = sub.toJSON(); lastSync = ''; save(); render();
     await syncPings();
-    showToast('Reminders are on. You will get a ping when '+PUP+' needs food.');
+    showToast('Reminders are on. You will get a ping when '+PUP+' needs you.'); renderSettings();
   }catch(e){ showToast('Could not turn on reminders. Try again from the Home Screen app.'); }
 }
 async function ping(kind, due, body){
   const p = store.push; if(!p || !CFG) return;
   try{
-    await fetch(CFG.SUPABASE_URL + '/rest/v1/rpc/sitstay_schedule', {method:'POST',
+    await fetch(CFG.SUPABASE_URL + '/rest/v1/rpc/sitstay_schedule', {method:'POST', keepalive:true,
       headers:{'Content-Type':'application/json', apikey:CFG.SUPABASE_ANON_KEY, Authorization:'Bearer ' + CFG.SUPABASE_ANON_KEY},
       body:JSON.stringify({p_endpoint:p.endpoint, p_p256dh:p.keys.p256dh, p_auth:p.keys.auth, p_kind:kind, p_due:due ? new Date(due).toISOString() : null, p_body:body})});
   }catch(e){}
@@ -486,6 +563,7 @@ const SP = {
   z:        ["###","..#",".#.","#..","###"],
   q:        ["###","..#",".##","...",".#."],
   ex:       ["#","#","#",".","#"],
+  heartO:   [".#.#.","#.#.#","#...#",".#.#.","..#.."],
   stone:    ["...#####...","..#.....#..",".#...#...#.",".#..###..#.",".#...#...#.",".#...#...#.",".#.......#.",".#.......#.",".#.......#.",".#.......#.","###########"],
   flower:   [".#.","#.#",".#.",".#."]
 };
@@ -538,6 +616,13 @@ function bortFace(o, head){
   else { g.beginPath(); g.arc(6,-3,4.6,0,Math.PI*2); g.fill(); }
   g.beginPath(); g.ellipse(20,2.5,3.8,3.2,0,0,Math.PI*2); g.fill();
   g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(-8,9); g.lineTo(-1,12.5); g.stroke();
+  const wear = !o.noWear && store.pet && store.pet.wear;
+  const poly = pts => { g.beginPath(); g.moveTo(pts[0],pts[1]); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i],pts[i+1]); g.closePath(); g.fill(); };
+  if(wear === 'bandana') poly([-12,9, 3,13, -6,21]);
+  else if(wear === 'hat'){ poly([-12,-12, 0,-14, -5,-31]); g.beginPath(); g.arc(-5,-32,2.6,0,Math.PI*2); g.fill(); }
+  else if(wear === 'shades'){ g.fillRect(0,-7,12,6); g.lineWidth = 2; g.beginPath(); g.moveTo(0,-5); g.lineTo(-9,-3); g.stroke(); }
+  else if(wear === 'crown') poly([-13,-12, -1,-14, 0,-23, -3,-18, -6,-24, -9,-18, -13,-22]);
+  else if(wear === 'tophat'){ g.fillRect(-14,-16,15,3); g.fillRect(-11,-30,9,15); }
   g.restore();
 }
 function bort(cx, foot, o){
@@ -581,8 +666,11 @@ function backdrop(scroll){
     if(y < LH-1 && hash(j+9) > 0.4){ px(x,y); px(x+1,y-1); px(x+2,y); }
   }
 }
+function happiness(){ const d = day(); let h = 4; if(d.hungry) h--; h -= Math.min(2, d.poops); if(d.leaves >= 3) h--; return Math.max(0, h); }
 function careLayer(now){
   const d = day();
+  const hp = happiness(), hx = Math.round(LW/2 - 12);
+  for(let i=0;i<4;i++) spr(i < hp ? SP.heart : SP.heartO, hx + i*6, 2);
   // meal icon, top left: bowl, full or empty with a blinking "!"
   spr(SP.bowl, 2, 4);
   if(!d.hungry){ hline(3,6,3); }
@@ -807,6 +895,7 @@ function frame(){
       else if(pooping) drawPoop(now);
       else { A.caption = ''; const a = currentAct(), T = ACTS[a].T; ACTS[a].draw(A.t % T, Math.floor(A.t / T)); }
     } else if(store.mode === 'ended') drawKennel(now);
+    else if(store.mode === 'free') drawSleep(now);
     else drawSleep(now);
     if(!store.pet.dead) careLayer(now);
     present();
@@ -831,15 +920,16 @@ function render(){
   $('#today').textContent = new Date().toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
   let st = '';
   if(m === 'idle') st = PUP+' is napping. Pick an activity, then start your day.';
-  else if(m === 'break') st = 'On break. '+PUP+' is resting too.';
+  else if(m === 'break') st = 'Between focus sessions. '+PUP+' is resting.';
+  else if(m === 'free') st = 'Free break · '+fmtClock(Math.max(0, store.freeStart + FREE - Date.now()))+' left';
   else if(m === 'ended') st = "Day's done. "+PUP+' is worn out.';
   else st = ACTS[a].name+' · '+(A.caption || plural(d.actCount[a] || 0, ACTS[a].unit));
   if(store.pet.dead) st = PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
   $('#brand').textContent = PUP.toUpperCase()+' · AGE '+store.pet.age;
-  const pb = $('#openPush'); pb.textContent = store.push ? 'Reminders on' : 'Reminders'; pb.classList.toggle('on', !!store.push);
   syncPings();
   $('#statFocus').textContent = fmt(d.focusMs);
+  const gm = store.goalMin*MIN; $('#goalFill').style.width = Math.min(100, d.focusMs/gm*100)+'%'; $('#goalBar').classList.toggle('met', d.focusMs >= gm); $('#goalText').textContent = 'Goal '+fmtGoal(store.goalMin);
   $('#statStretch').textContent = fmtClock(d.streakMs);
   $('#statLeft').textContent = d.leaves;
   d.acts.forEach(id => {
@@ -850,6 +940,9 @@ function render(){
     b.querySelector('.fill').style.width = Math.min(100, ms/GOAL*100) + '%';
     b.querySelector('.meta').textContent = done ? 'Done ✓' : Math.floor(ms/MIN) + ' / 30 min';
   });
+  const fr = $('#free');
+  fr.disabled = !(m === 'free' || (m === 'playing' && !d.freeUsed));
+  fr.textContent = m === 'free' ? 'End break' : d.freeUsed ? 'Break used' : 'Free break';
   const fb = $('#feed'), cb = $('#clean');
   fb.disabled = !d.hungry || m === 'idle';
   fb.classList.toggle('alert', !!d.hungry && m !== 'idle');
@@ -858,19 +951,63 @@ function render(){
   cb.classList.toggle('alert', canClean());
   cb.textContent = d.poops === 0 ? 'All clean' : canClean() ? 'Clean up ('+d.poops+')' : 'Clean after activity';
   const pr = $('#primary'), se = $('#secondary');
-  pr.textContent = m === 'idle' ? 'Start day' : m === 'playing' ? 'Take a break' : m === 'break' ? 'Back to work' : "Today's score";
+  pr.textContent = m === 'idle' ? 'Start day' : (m === 'playing' || m === 'free') ? 'End focus' : m === 'break' ? 'Start focus' : "Today's score";
   se.textContent = m === 'ended' ? 'Resume day' : 'End day';
   se.disabled = m === 'idle';
   if(store.pet.dead){ pr.textContent = 'Revive or rest'; }
 }
-$('#primary').addEventListener('click', () => { if(store.pet.dead){ openDead(); return; } const m = store.mode; if(m === 'idle') startDay(); else if(m === 'playing') takeBreak(); else if(m === 'break') backToWork(); else openSummary(); });
+$('#primary').addEventListener('click', () => { if(store.pet.dead){ openDead(); return; } const m = store.mode; if(m === 'idle') startDay(); else if(m === 'playing' || m === 'free') takeBreak(); else if(m === 'break') backToWork(); else openSummary(); });
 $('#secondary').addEventListener('click', () => { if(store.mode === 'ended') resumeDay(); else if(store.mode !== 'idle') endDay(); });
 $('#feed').addEventListener('click', feed);
 $('#vet').addEventListener('click', vet);
 $('#rest').addEventListener('click', layToRest);
 $('#adoptGo').addEventListener('click', adopt);
 $('#openGraves').addEventListener('click', openGraves);
-$('#openPush').addEventListener('click', enablePush);
+$('#free').addEventListener('click', () => { if(store.mode === 'free') endFree(Date.now(), false); else startFree(); });
+$('#openSettings').addEventListener('click', () => { renderSettings(); openSheet('#settings'); });
+$('#setDone').addEventListener('click', () => closeSheet('#settings'));
+$('#settings').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#settings'); });
+$('#pushBtn').addEventListener('click', enablePush);
+$('#goalInput').addEventListener('change', e => { const h = parseFloat(e.target.value); if(h >= 0.5 && h <= 12){ store.goalMin = Math.round(h*60); save(); render(); } else e.target.value = store.goalMin/60; });
+$('#copyCode').addEventListener('click', () => {
+  const code = store.backupId;
+  try{ navigator.clipboard.writeText(code).then(() => showToast('Backup code copied.'), () => selectCode()); }catch(e){ selectCode(); }
+});
+function selectCode(){ const r = document.createRange(); r.selectNodeContents($('#backupCode')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); showToast('Code selected. Tap Copy.'); }
+let restoreArmed = false;
+$('#restoreBtn').addEventListener('click', async () => {
+  const cfg = window.SITSTAY_CONFIG, code = $('#restoreInput').value.trim(), btn = $('#restoreBtn');
+  if(!cfg){ showToast('Restore works in the SitStay app on your Home Screen.'); return; }
+  if(code.length < 20){ btn.textContent = 'Paste a full backup code first'; return; }
+  if(!restoreArmed){ restoreArmed = true; btn.textContent = "Tap again to replace this phone's pup"; return; }
+  restoreArmed = false; btn.textContent = 'Restoring...';
+  try{
+    const r = await fetch(cfg.SUPABASE_URL + '/rest/v1/rpc/sitstay_restore', {method:'POST',
+      headers:{'Content-Type':'application/json', apikey:cfg.SUPABASE_ANON_KEY, Authorization:'Bearer ' + cfg.SUPABASE_ANON_KEY}, body:JSON.stringify({p_id:code})});
+    const data = r.ok ? await r.json() : null;
+    if(!data || !data.days){ btn.textContent = 'No backup found for that code'; return; }
+    const keepPush = store.push;
+    store = Object.assign(blank(), data, {push:keepPush, backupId:code, lastTick:Date.now(), hiddenAt:0});
+    if(store.mode === 'playing' || store.mode === 'free') store.mode = 'break';
+    PUP = store.pet.name; lastSync = ''; save(); buildCards(); render(); renderSettings();
+    btn.textContent = 'Restore'; $('#restoreInput').value = ''; closeSheet('#settings');
+    showToast('Restored '+PUP+'.');
+  }catch(e){ btn.textContent = 'Could not reach the backup. Try again.'; }
+});
+function renderSettings(){
+  const cfg = window.SITSTAY_CONFIG, pushOk = !!cfg && 'serviceWorker' in navigator && 'PushManager' in window;
+  $('#goalInput').value = store.goalMin/60;
+  $('#pushNote').textContent = !pushOk ? 'Reminders work in the SitStay app on your Home Screen.' : store.push ? 'On. You will get pings for lunch, if '+PUP+' goes 2 days without food, when you leave mid-session, and when a free break ends.' : 'Get a ping for lunch, if '+PUP+' goes hungry too long, when you leave mid-session, and when a free break ends.';
+  $('#pushBtn').hidden = !pushOk || !!store.push;
+  $('#backupNote').textContent = cfg ? 'Your pup, graveyard and history back up automatically'+(store.lastBackup ? ' (last backup '+new Date(store.lastBackup).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+')' : '')+'. Save this code somewhere safe, like Notes, to restore on a new phone.' : 'Backup works in the SitStay app on your Home Screen.';
+  $('#backupCode').textContent = store.backupId;
+  const pt = store.pet;
+  $('#wearList').innerHTML = WEAR.map(w => {
+    const ok = pt.age >= w.age;
+    return '<button class="wchip" data-wear="'+w.id+'" aria-pressed="'+(pt.wear === w.id)+'"'+(ok ? '' : ' disabled')+'>'+w.name+'<small>'+(ok ? (pt.wear === w.id ? 'Wearing' : 'Unlocked') : 'Age '+w.age)+'</small></button>';
+  }).join('');
+  $('#wearList').querySelectorAll('.wchip').forEach(b => b.addEventListener('click', () => { pt.wear = pt.wear === b.dataset.wear ? null : b.dataset.wear; save(); renderSettings(); dirty = true; }));
+}
 $('#gravesClose').addEventListener('click', () => closeSheet('#graves'));
 $('#graves').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#graves'); });
 $('#clean').addEventListener('click', clean);
@@ -881,7 +1018,8 @@ function openSummary(){
   const d = day(), focusMin = d.focusMs/MIN, ratio = d.focusMs/Math.max(1, d.focusMs + d.awayMs);
   const doneN = d.acts.filter(a => d.done[a]).length;
   const hungryPenalty = Math.floor(d.unfedMs/(5*MIN)), poopPenalty = d.poops*5;
-  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 - hungryPenalty - poopPenalty));
+  const goalMet = d.focusMs >= store.goalMin*MIN;
+  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) - hungryPenalty - poopPenalty));
   let verdict;
   if(focusMin < 1) verdict = 'Not much playtime logged yet today.';
   else if(doneN === 3 && ratio >= 0.9 && !d.poops) verdict = 'Best boy energy. Every activity done, yard spotless, and you barely left.';
@@ -891,7 +1029,7 @@ function openSummary(){
   else verdict = 'The squirrels won today. Tomorrow is a new walk.';
   $('#sumScore').textContent = score;
   $('#sumVerdict').textContent = verdict;
-  const rows = [['Focus time', fmt(d.focusMs)], ['Longest stretch', fmt(d.longestMs)], ['Times you left', d.leaves], ['Time away', fmt(d.awayMs)]];
+  const rows = [['Focus time', fmt(d.focusMs)], ['Daily goal ('+fmtGoal(store.goalMin)+')', goalMet ? 'Met' : 'Not yet'], ['Focus sessions', d.sessions || 0], ['Longest stretch', fmt(d.longestMs)], ['Times you left', d.leaves], ['Time away', fmt(d.awayMs)]];
   $('#sumRows').innerHTML = rows.map(r => '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('');
   $('#sumActs').innerHTML = d.acts.map(a => {
     const ms = d.actMs[a] || 0, n = d.actCount[a] || 0;
@@ -914,6 +1052,7 @@ $('#summary').addEventListener('click', e => { if(e.target === e.currentTarget) 
 /* ---------- boot ---------- */
 readColors(); resize();
 if(store.day && store.day !== todayKey()) rollover();
+else if(store.mode === 'free' && Date.now() >= store.freeStart + FREE) endFree(Date.now(), true);
 else if(store.mode === 'playing'){
   const now = Date.now(), gap = now - (store.hiddenAt || store.lastTick);
   if(store.lastTick && gap > GRACE) registerAway(gap, now);

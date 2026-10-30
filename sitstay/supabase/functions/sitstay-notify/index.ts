@@ -1,5 +1,5 @@
 // sitstay-notify: sends SitStay feeding reminders that have come due.
-// Runs every 5 minutes from the cron job in sitstay.sql.
+// Runs every minute from the cron job in sitstay.sql.
 // Uses the same secrets as twind-notify: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET.
 // Deploy with "Verify JWT" turned OFF (it checks the cron secret itself).
 
