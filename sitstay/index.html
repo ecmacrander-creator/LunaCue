@@ -555,6 +555,7 @@ function anySheetOpen(){ return [...document.querySelectorAll('.sheet')].some(x 
 // First tap while dimmed only wakes the screen; it doesn't press whatever is under your finger.
 document.addEventListener('pointerdown', e => {
   lastTouch = Date.now();
+  if(store.mode === 'playing') requestWake();
   if(dimmed){ setDim(false); swallowClick = true; e.preventDefault(); e.stopPropagation(); }
 }, {capture:true});
 document.addEventListener('click', e => { if(swallowClick){ swallowClick = false; e.preventDefault(); e.stopPropagation(); } }, {capture:true});
