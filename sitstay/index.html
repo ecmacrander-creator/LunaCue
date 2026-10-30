@@ -23,7 +23,8 @@
   --sky-top:#8FCBF2; --sky-bot:#DCF0FA; --sun:#FFDD72; --cloud:#FFFFFF;
   --hill:#9CCB8A; --tree:#3E8A48; --trunk:#7A5A3A;
   --grass:#7DC26B; --grass-dark:#5EA650; --path:#EAD9B2;
-  --fur:#D99E62; --fur-dark:#A8693A; --fur-light:#F4D6AC; --nose:#2A2522;
+  --fur:#E8BC8A; --fur-shade:#D49C66; --fur-dark:#C2865A; --fur-light:#FCEEDB; --nose:#3A2722;
+  --outline:#6E4631; --ear-in:#F3B4A6; --blush:rgba(236,128,118,.38); --tag:#F2C14E;
   --collar:#E0505F; --tongue:#FF7D96; --ball:#C9E23C; --disc:#FF8A3D; --bone:#F6EEDC;
   --dirt:#8C6646; --mat:#3FA7A0; --rope:#E8BE5A; --wing:#A974EE;
   --bubble:rgba(130,195,255,.28); --bubble-edge:#FFFFFF;
@@ -280,7 +281,7 @@ function setActivity(a){ store.activity = a; A.t = 0; A.lastCycle = 0; save(); r
 const cv = $('#scene'), ctx = cv.getContext('2d');
 let W = 0, H = 0, S = 1, G = 0;
 const C = {};
-const TOK = ['sky-top','sky-bot','sun','cloud','hill','tree','trunk','grass','grass-dark','path','fur','fur-dark','fur-light','nose','collar','tongue','ball','disc','bone','dirt','mat','rope','wing','bubble','bubble-edge','wall','door','bed','ink','surface','shadow'];
+const TOK = ['sky-top','sky-bot','sun','cloud','hill','tree','trunk','grass','grass-dark','path','fur','fur-shade','fur-dark','fur-light','nose','outline','ear-in','blush','tag','collar','tongue','ball','disc','bone','dirt','mat','rope','wing','bubble','bubble-edge','wall','door','bed','ink','surface','shadow'];
 function readColors(){ const cs = getComputedStyle(document.documentElement); TOK.forEach(t => { C[t.replace(/-(\w)/g, (_,c) => c.toUpperCase())] = cs.getPropertyValue('--'+t).trim(); }); }
 function resize(){
   const r = cv.parentElement.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -300,8 +301,83 @@ const ease = (u) => { u = clamp(u); return u<.5 ? 2*u*u : 1-Math.pow(-2*u+2,2)/2
 const hash = (k) => { const x = Math.sin(k*12.9898)*43758.5453; return x - Math.floor(x); };
 function rrect(x,y,w,h,r,col){ ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.fill(); }
 
-function tail(x,y,rot,cx,cy,ex,ey){ ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.strokeStyle = C.furDark; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(cx,cy,ex,ey); ctx.stroke(); ctx.restore(); }
-function boneShape(x,y,len,r){ ctx.fillStyle = C.bone; ctx.fillRect(x-len/2, y-r*0.6, len, r*1.2); [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,b]) => { ctx.beginPath(); ctx.arc(x+a*len/2, y+b*r*0.55, r*0.7, 0, Math.PI*2); ctx.fill(); }); }
+/* ---------- Bort: chihuahua mix, storybook style ---------- */
+const OL = 1.6; // outline half-width in puppy units
+function blob(build, fill){
+  ctx.beginPath(); build();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = C.outline; ctx.lineWidth = OL*2; ctx.stroke();
+  ctx.fillStyle = fill; ctx.fill();
+}
+function oval(x,y,rx,ry,fill,r){ blob(() => ctx.ellipse(x,y,rx,ry,r||0,0,Math.PI*2), fill); }
+function limb(x1,y1,x2,y2,w,col){
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = C.outline; ctx.lineWidth = w + OL*2; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+}
+function coat(y0,y1){ const g = ctx.createLinearGradient(0,y0,0,y1); g.addColorStop(0,C.fur); g.addColorStop(1,C.furShade); return g; }
+function curlTail(x,y,rot,len){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+  const path = () => { ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(-len*0.55,-len*0.15, -len*0.75,-len*0.75, -len*0.25,-len); };
+  ctx.lineCap = 'round';
+  path(); ctx.strokeStyle = C.outline; ctx.lineWidth = 4.6 + OL*2; ctx.stroke();
+  path(); ctx.strokeStyle = C.fur; ctx.lineWidth = 4.6; ctx.stroke();
+  ctx.restore();
+}
+function paw(x,y){ oval(x+1.2,y-1.6,3.6,2.4,C.furLight); }
+function boneShape(x,y,len,r){
+  const draw = () => {
+    ctx.moveTo(x-len/2, y-r*0.5); ctx.lineTo(x+len/2, y-r*0.5);
+    ctx.arc(x+len/2, y-r*0.55, r*0.65, Math.PI*0.9, Math.PI*2.4);
+    ctx.arc(x+len/2, y+r*0.55, r*0.65, -Math.PI*0.4, Math.PI*1.1);
+    ctx.lineTo(x-len/2, y+r*0.5);
+    ctx.arc(x-len/2, y+r*0.55, r*0.65, Math.PI*0.1, Math.PI*1.6);
+    ctx.arc(x-len/2, y-r*0.55, r*0.65, Math.PI*0.6, Math.PI*2.1);
+    ctx.closePath();
+  };
+  blob(draw, C.bone);
+}
+
+function drawHead(o, tilt){
+  ctx.save(); ctx.rotate(tilt);
+  // collar sits under the jaw
+  limb(-8,9,-1,12.5,3.6,C.collar);
+  oval(-3.5,13.4,1.9,1.9,C.tag);
+  // far ear, tucked behind
+  blob(() => { ctx.moveTo(-9,-4); ctx.quadraticCurveTo(-19,-22,-13,-30); ctx.quadraticCurveTo(-5,-22,-1,-10); ctx.closePath(); }, C.furDark);
+  // apple-dome head + short muzzle, one shared outline
+  ctx.beginPath(); ctx.arc(0,-1,13.5,0,Math.PI*2); ctx.ellipse(12,5.5,8.5,6,0.1,0,Math.PI*2);
+  ctx.strokeStyle = C.outline; ctx.lineWidth = OL*2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.fillStyle = coat(-15,12); ctx.beginPath(); ctx.arc(0,-1,13.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = C.furLight; ctx.beginPath(); ctx.ellipse(12,5.5,8.5,6,0.1,0,Math.PI*2); ctx.fill();
+  // cream blaze between the eyes
+  ell(8,-5,2.4,6.5,C.furLight,0.45);
+  // near ear: big, a little soft at the tip
+  blob(() => { ctx.moveTo(-6,-7); ctx.quadraticCurveTo(-10,-30,-1,-33); ctx.quadraticCurveTo(5,-30,6,-22); ctx.quadraticCurveTo(7,-14,4,-9); ctx.closePath(); }, C.fur);
+  ctx.fillStyle = C.earIn; ctx.beginPath(); ctx.moveTo(-3.5,-10); ctx.quadraticCurveTo(-6,-27,-1,-29); ctx.quadraticCurveTo(3,-26,3.5,-20); ctx.quadraticCurveTo(4,-14,2,-11); ctx.closePath(); ctx.fill();
+  // cheek
+  ell(5,6,3.6,2.3,C.blush);
+  // eye
+  if(o.sleep){
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(6,-3,3.4,0.25,Math.PI-0.25); ctx.stroke();
+  } else {
+    ell(6,-2.6,3.7,4.2,C.nose);
+    ell(7.3,-4.1,1.5,1.5,'#FFFFFF');
+    ell(5,-0.9,0.65,0.65,'#FFFFFF');
+    ctx.strokeStyle = C.outline; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(6.4,-6,5.2,-2.3,-1.2); ctx.stroke();
+  }
+  // nose + mouth
+  ell(20,2.6,3,2.4,C.nose); ell(19.2,1.8,0.9,0.6,'rgba(255,255,255,.55)');
+  ctx.strokeStyle = C.outline; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(19.6,5); ctx.quadraticCurveTo(17.5,9,13.5,8.2); ctx.stroke();
+  if(o.tongue) oval(14.5,10.6,2.4,3.4,C.tongue);
+  if(o.ball) drawBall(17,12,5.5);
+  if(o.disc) oval(18,12,10,3,C.disc);
+  if(o.bone) boneShape(17,12,12,4.2);
+  ctx.restore();
+}
 
 function drawPuppy(o){
   const face = o.face || 1, wag = o.wag || 0;
@@ -310,54 +386,47 @@ function drawPuppy(o){
   ctx.scale(S, S);
   if(o.rot){ ctx.translate(0,-16); ctx.rotate(o.rot*face); ctx.translate(0,16); }
   ctx.scale(face*(o.sx == null ? 1 : o.sx), 1);
-  let head;
+  let hx, hy, tilt;
   if(o.pose === 'lie'){
-    tail(-26,-12,0.3+wag*0.4,-10,2,-16,-8);
     const br = o.breath || 0;
-    ell(-16,-3,10,4.5,C.furDark);
-    ell(0,-14,30,13+br,C.fur);
-    ell(3,-8,18,5,C.furLight);
-    ell(-20,-3,10,4.5,C.fur);
-    ell(22,-3,10,4.5,C.furDark);
-    ell(28,-3,10,4.5,C.fur);
-    head = {x:26, y:-24, tilt:o.sleep ? 0.3 : 0};
+    curlTail(-25,-12,-0.6+wag*0.3,15);
+    oval(-15,-3,7,3.2,C.furDark);
+    oval(0,-13,27,11+br,coat(-25,-2));
+    ell(5,-6,15,3.4,C.furLight);
+    oval(-14,-11,10,8,coat(-20,-3));
+    oval(-18,-3,7,3.2,C.furLight);
+    oval(22,-3,8,3.2,C.furDark);
+    oval(28,-3.2,8,3.2,C.furLight);
+    hx = 25; hy = -22; tilt = o.sleep ? 0.28 : 0;
   } else if(o.pose === 'sit'){
-    tail(-20,-6,wag*0.6,-10,4,-20,0);
-    seg(15,-26,17,0,C.furDark,7);
-    ell(-2,-28,14,22,C.fur,0.35);
-    ell(-12,-12,14,11,C.fur);
-    ell(-3,-2,10,4,C.fur);
-    ell(3,-27,7,13,C.furLight,0.35);
-    if(o.paw){ const a = clamp(o.paw), fx = 10+16*a, fy = -34*a; seg(9,-28,fx,fy,C.fur,7); ell(fx+1,fy,4.5,3.5,C.furLight); }
-    else { seg(9,-28,9,0,C.fur,7); ell(11,-1,5,3,C.fur); }
-    head = {x:12, y:-52, tilt:o.tilt || 0};
+    curlTail(-17,-6,-0.9+wag*0.5,15);
+    limb(14,-26,15.5,-1.5,4.6,C.furDark); paw(15.5,0);
+    oval(-2,-27,12,19,coat(-46,-8),0.35);
+    oval(4,-29,5.5,9.5,C.furLight,0.35);
+    oval(-10,-11,11.5,9.5,coat(-21,-2));
+    oval(-3,-2.2,7.5,3,C.furLight);
+    if(o.paw){ const a = clamp(o.paw), fx = 9+15*a, fy = -1.5-31*a; limb(8,-27,fx,fy,4.6,C.fur); oval(fx+1,fy,3.4,2.8,C.furLight); }
+    else { limb(8,-27,8,-1.5,4.6,C.fur); paw(8,0); }
+    hx = 11; hy = -50; tilt = o.tilt || 0;
   } else {
     const ph = o.leg || 0, a = o.run || 0;
-    const sw = off => Math.sin(ph+off)*8*a, lift = off => Math.max(0, Math.cos(ph+off))*4*a;
-    const tuck = o.tuck ? 8 : 0;
-    tail(-25,-38,-0.2+wag*0.5,-12,-2,-16,-16);
-    seg(-14,-24,-14+sw(Math.PI),-lift(Math.PI)-tuck,C.furDark,7);
-    seg(16,-24,16+sw(0),-lift(0)-tuck,C.furDark,7);
-    ell(0,-32,28,15,C.fur);
-    ell(2,-25,18,6,C.furLight);
-    seg(-18,-24,-18+sw(0),-lift(0)-tuck,C.fur,7);
-    seg(12,-24,12+sw(Math.PI),-lift(Math.PI)-tuck,C.fur,7);
-    head = {x:24, y:-46, tilt:(o.headDown || 0)*0.7};
+    const sw = off => Math.sin(ph+off)*7*a, lift = off => Math.max(0, Math.cos(ph+off))*4*a;
+    const tuck = o.tuck ? 7 : 0;
+    curlTail(-22,-33,-0.15+wag*0.45,17);
+    limb(-13,-24,-13+sw(Math.PI),-1.5-lift(Math.PI)-tuck,4.4,C.furDark); paw(-13+sw(Math.PI),-lift(Math.PI)-tuck);
+    limb(15,-24,15+sw(0),-1.5-lift(0)-tuck,4.4,C.furDark); paw(15+sw(0),-lift(0)-tuck);
+    const body = () => { ctx.moveTo(-24,-28); ctx.bezierCurveTo(-24,-39,-8,-39,6,-37); ctx.bezierCurveTo(17,-37,24,-33,23,-26); ctx.bezierCurveTo(22,-20,15,-19,8,-20); ctx.bezierCurveTo(0,-21,-6,-18,-13,-19); ctx.bezierCurveTo(-22,-19,-25,-22,-24,-28); ctx.closePath(); };
+    blob(body, coat(-40,-18));
+    ctx.save(); ctx.beginPath(); body(); ctx.clip();
+    ell(19,-24,7,8,C.furLight); ell(0,-19,13,3,C.furLight);
+    ctx.restore();
+    oval(-16,-26,8,8.5,coat(-34,-18));
+    limb(-17,-23,-17+sw(0),-1.5-lift(0)-tuck,4.6,C.fur); paw(-17+sw(0),-lift(0)-tuck);
+    limb(11,-24,11+sw(Math.PI),-1.5-lift(Math.PI)-tuck,4.6,C.fur); paw(11+sw(Math.PI),-lift(Math.PI)-tuck);
+    hx = 23; hy = -45; tilt = (o.headDown || 0)*0.7;
   }
-  ctx.save();
-  ctx.translate(head.x, head.y); ctx.rotate(head.tilt);
-  seg(-10,9,-2,14,C.collar,5);
-  ell(0,0,15,14,C.fur);
-  ell(12,6,10,7.5,C.furLight);
-  ell(21,3,3.6,3,C.nose);
-  if(o.tongue) ell(13,14,3,4.5,C.tongue);
-  if(o.sleep){ ctx.strokeStyle = C.nose; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(4,-4,3,0.2,Math.PI-0.2); ctx.stroke(); }
-  else { ell(4,-4,2.6,2.9,C.nose); ell(5,-5.2,0.9,0.9,'#FFFFFF'); }
-  ell(-5,3,5.5,11.5,C.furDark,0.25);
-  if(o.ball) drawBall(17,12,5.5);
-  if(o.disc) ell(18,12,10,3.2,C.disc);
-  if(o.bone) boneShape(17,12,14,4.5);
-  ctx.restore();
+  ctx.translate(hx, hy);
+  drawHead(o, tilt);
   ctx.restore();
 }
 function drawBall(x,y,r){ ell(x,y,r,r,C.ball); ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = Math.max(1, r*0.22); ctx.beginPath(); ctx.arc(x-r*0.9,y,r*0.9,-0.9,0.9); ctx.stroke(); }
