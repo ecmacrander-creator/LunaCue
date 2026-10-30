@@ -148,7 +148,7 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
   <div class="stats">
     <div class="stat"><div class="k">Focus today</div><div class="v" id="statFocus">0m</div><div class="goal" id="goalBar"><i id="goalFill"></i></div><div class="gk" id="goalText">Goal 4h</div></div>
     <div class="stat"><div class="k">This stretch</div><div class="v" id="statStretch">0:00</div></div>
-    <div class="stat"><div class="k">Times left</div><div class="v" id="statLeft">0</div></div>
+    <div class="stat"><div class="k">Times away</div><div class="v" id="statLeft">0</div></div>
   </div>
 
   <div class="care">
@@ -1031,7 +1031,7 @@ function openSummary(){
   else verdict = 'The squirrels won today. Tomorrow is a new walk.';
   $('#sumScore').textContent = score;
   $('#sumVerdict').textContent = verdict;
-  const rows = [['Focus time', fmt(d.focusMs)], ['Daily goal ('+fmtGoal(store.goalMin)+')', goalMet ? 'Met' : 'Not yet'], ['Focus sessions', d.sessions || 0], ['Longest stretch', fmt(d.longestMs)], ['Times you left', d.leaves], ['Time away', fmt(d.awayMs)]];
+  const rows = [['Focus time', fmt(d.focusMs)], ['Daily goal ('+fmtGoal(store.goalMin)+')', goalMet ? 'Met' : 'Not yet'], ['Focus sessions', d.sessions || 0], ['Longest stretch', fmt(d.longestMs)], ['Times away', d.leaves], ['Time away', fmt(d.awayMs)]];
   $('#sumRows').innerHTML = rows.map(r => '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('');
   $('#sumActs').innerHTML = d.acts.map(a => {
     const ms = d.actMs[a] || 0, n = d.actCount[a] || 0;
