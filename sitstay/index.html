@@ -47,9 +47,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body)
 [hidden]{display:none!important}
 .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:10px;
   padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:1;margin:0;color:var(--accent)}
-.date{color:var(--muted);font-size:.85rem;font-weight:700;text-align:right}
+.date{color:var(--muted);font-size:.82rem;font-weight:700;margin-top:4px}
 .shell{flex:1 1 auto;min-height:220px;display:flex;flex-direction:column;padding:12px 12px 8px;border-radius:30px;
   background:linear-gradient(160deg,var(--shell-hi),var(--shell) 45%,var(--shell-lo));box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 6px 16px rgba(60,20,100,.18)}
 .lcd{position:relative;flex:1 1 auto;border-radius:12px;overflow:hidden;background:var(--lcd);box-shadow:inset 0 3px 8px rgba(0,0,0,.28)}
@@ -97,6 +97,7 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
 .week .bar small{font-size:.66rem;color:var(--muted);font-weight:800;font-variant-numeric:tabular-nums}
 .weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:.72rem;font-weight:800;color:var(--muted);margin-top:-8px}
 .top{display:flex;align-items:center;gap:10px}
+.link.on{border-color:var(--ok);color:var(--ok)}
 .link{font-family:var(--font-display);font-size:.72rem;background:none;border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 10px;cursor:pointer}
 .graves{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
 .grave{background:var(--bg);border:2px solid var(--line);border-radius:60px 60px 8px 8px;padding:22px 12px 14px;text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0}
@@ -116,8 +117,8 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
 
 <div class="app">
   <header>
-    <h1>SitStay</h1>
-    <div class="top"><div class="date" id="today"></div><button class="link" id="openGraves">Graveyard</button></div>
+    <div><h1>SitStay</h1><div class="date" id="today"></div></div>
+    <div class="top"><button class="link" id="openPush">Reminders</button><button class="link" id="openGraves">Graveyard</button></div>
   </header>
 
   <div class="shell">
@@ -196,6 +197,7 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
   </div>
 </div>
 
+<script src="config.js"></script>
 <script>
 (function(){
 const $ = s => document.querySelector(s);
@@ -338,7 +340,8 @@ function feed(){
   d.hungry = false; d.meals++; store.pet.lastFed = Date.now(); d.nextHunger = d.meals < 2 ? Date.now() + 4*3600000 : 0;
   const now = Date.now(); A.eatStart = now; A.eatUntil = now + 3000; save(); render();
 }
-function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key) return; pt.age++; pt.lastAgedKey = key; save(); }
+function dayComplete(d){ return !!d && d.acts.every(a => d.done[a]); }
+function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key || !dayComplete(store.days[key])) return; pt.age++; pt.lastAgedKey = key; save(); }
 const yrs = n => n + (n === 1 ? ' dog year' : ' dog years');
 const shortDate = t => new Date(t).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
 function checkDeath(now){
@@ -384,6 +387,41 @@ function openGraves(){
   }).join('') : '<p class="empty">No graves yet. Keep '+PUP+' fed and it stays that way.</p>';
   openSheet('#graves');
 }
+const CFG = window.SITSTAY_CONFIG || null;
+const canPush = () => !!CFG && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let swReg = null, lastSync = '';
+function b64ToBytes(b){ const p = '='.repeat((4 - b.length % 4) % 4); const r = atob((b + p).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(r, c => c.charCodeAt(0)); }
+async function enablePush(){
+  if(!canPush()){ showToast('Reminders work in the SitStay app on your Home Screen.'); return; }
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){ showToast('Notifications are off. Allow them for SitStay in Settings.'); return; }
+    const reg = swReg || await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToBytes(CFG.VAPID_PUBLIC_KEY)});
+    store.push = sub.toJSON(); lastSync = ''; save(); render();
+    await syncPings();
+    showToast('Reminders are on. You will get a ping when '+PUP+' needs food.');
+  }catch(e){ showToast('Could not turn on reminders. Try again from the Home Screen app.'); }
+}
+async function ping(kind, due, body){
+  const p = store.push; if(!p || !CFG) return;
+  try{
+    await fetch(CFG.SUPABASE_URL + '/rest/v1/rpc/sitstay_schedule', {method:'POST',
+      headers:{'Content-Type':'application/json', apikey:CFG.SUPABASE_ANON_KEY, Authorization:'Bearer ' + CFG.SUPABASE_ANON_KEY},
+      body:JSON.stringify({p_endpoint:p.endpoint, p_p256dh:p.keys.p256dh, p_auth:p.keys.auth, p_kind:kind, p_due:due ? new Date(due).toISOString() : null, p_body:body})});
+  }catch(e){}
+}
+async function syncPings(){
+  if(!store.push) return;
+  const pt = store.pet, d = day();
+  const lunch = !pt.dead && d.meals === 1 && d.nextHunger ? d.nextHunger : 0;
+  const sig = [pt.name, pt.lastFed, pt.dead, lunch].join('|'); if(sig === lastSync) return; lastSync = sig;
+  await ping('lunch', lunch, pt.name+' is hungry for lunch. Open SitStay to feed '+pt.name+'.');
+  await ping('weak', pt.dead ? 0 : pt.lastFed + 2*DAY, pt.name+" hasn't eaten in 2 days. Feed "+pt.name+' before day 3.');
+  await ping('last', pt.dead ? 0 : pt.lastFed + 3*DAY - 6*3600000, 'Last chance: '+pt.name+' has about 6 hours left without food.');
+}
+if(canPush()) navigator.serviceWorker.register('sw.js').then(r => { swReg = r; }).catch(() => {});
 function clean(){
   if(!canClean()) return;
   const d = day(); d.cleaned += d.poops; d.poops = 0;
@@ -722,6 +760,17 @@ function drawGrave(now){
   const hy = GY - 26 + (Math.floor(now/600) % 2);
   hline(x-3, x+3, hy); px(x-4, hy+1); px(x+4, hy+1);
 }
+function drawKennel(now){
+  backdrop(0);
+  const dx = Math.round(LW*0.5), x0 = dx - 15, x1 = dx + 15, wall = GY - 18, peak = GY - 30;
+  bort(dx - 10, GY-1, {pose:'lie', sleep:true});
+  for(let y=peak-24;y<GY;y++) for(let x=x0-16;x<=x1+3;x++){ const inDoor = x > dx-6 && x < dx+6 && y > GY-12; if(!inDoor) off(x,y); }
+  vline(x0, wall, GY-1); vline(x1, wall, GY-1);
+  line(x0-3, wall+1, dx, peak); line(dx, peak, x1+3, wall+1); hline(x0-3, x1+3, wall+1);
+  vline(dx-6, GY-10, GY-1); vline(dx+6, GY-10, GY-1); hline(dx-4, dx+4, GY-12); px(dx-5, GY-11); px(dx+5, GY-11);
+  hline(dx-3, dx+3, GY-15);
+  for(let i=0;i<2;i++){ const ph = ((now*0.0004) + i/2) % 1; spr(SP.z, dx + 8 + Math.round(ph*5), peak - 4 - Math.round(ph*9)); }
+}
 function drawSleep(now){
   backdrop(0);
   const x = LW*0.5;
@@ -757,7 +806,8 @@ function frame(){
       else if(partying) drawParty(now);
       else if(pooping) drawPoop(now);
       else { A.caption = ''; const a = currentAct(), T = ACTS[a].T; ACTS[a].draw(A.t % T, Math.floor(A.t / T)); }
-    } else drawSleep(now);
+    } else if(store.mode === 'ended') drawKennel(now);
+    else drawSleep(now);
     if(!store.pet.dead) careLayer(now);
     present();
   }
@@ -787,6 +837,8 @@ function render(){
   if(store.pet.dead) st = PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
   $('#brand').textContent = PUP.toUpperCase()+' · AGE '+store.pet.age;
+  const pb = $('#openPush'); pb.textContent = store.push ? 'Reminders on' : 'Reminders'; pb.classList.toggle('on', !!store.push);
+  syncPings();
   $('#statFocus').textContent = fmt(d.focusMs);
   $('#statStretch').textContent = fmtClock(d.streakMs);
   $('#statLeft').textContent = d.leaves;
@@ -818,6 +870,7 @@ $('#vet').addEventListener('click', vet);
 $('#rest').addEventListener('click', layToRest);
 $('#adoptGo').addEventListener('click', adopt);
 $('#openGraves').addEventListener('click', openGraves);
+$('#openPush').addEventListener('click', enablePush);
 $('#gravesClose').addEventListener('click', () => closeSheet('#graves'));
 $('#graves').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#graves'); });
 $('#clean').addEventListener('click', clean);
@@ -844,6 +897,8 @@ function openSummary(){
     const ms = d.actMs[a] || 0, n = d.actCount[a] || 0;
     return '<dt>'+ACTS[a].name+' · '+plural(n, ACTS[a].unit)+'</dt><dd'+(d.done[a] ? ' class="ok">Done ✓' : '>'+Math.floor(ms/MIN)+' / 30 min')+'</dd>';
   }).join('');
+  const earned = store.pet.lastAgedKey === todayKey() || (store.mode !== 'ended' && dayComplete(d));
+  $('#sumActs').innerHTML += '<dt>Dog year</dt><dd'+(dayComplete(d) ? ' class="ok">'+(earned ? '+1 year' : 'Earned') : '>Finish all 3 to earn')+'</dd>';
   $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd>';
   const days = []; for(let i=6;i>=0;i--){ const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt); }
   const vals = days.map(dt => (store.days[keyOf(dt)] || {}).focusMs || 0), max = Math.max(...vals, MIN);
