@@ -142,7 +142,7 @@ input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px 
   </div>
   <p class="status" id="status"></p>
 
-  <p class="label">Today's enrichment · 30 min each</p>
+  <p class="label">Today's enrichment · 30 straight min each</p>
   <div class="acts" id="acts" role="group" aria-label="Today's enrichment activities"></div>
 
   <div class="stats">
@@ -327,10 +327,12 @@ function rollover(){
     store.mode = 'idle'; store.day = todayKey(); store.activity = null; releaseWake(); save(); buildCards(); render();
   }
 }
+function resetProgress(d){ let lost = false; d.acts.forEach(a => { if(!d.done[a] && d.actMs[a]){ d.actMs[a] = 0; lost = true; } }); return lost; }
 function registerAway(away, now){
   const d = day(); d.leaves++; d.awayMs += away; d.streakMs = 0;
+  const lost = resetProgress(d);
   A.returnStart = now; A.returnUntil = now + 3500;
-  showToast(PUP+' waited by the door for '+(away < MIN ? Math.round(away/1000)+' sec' : fmt(away)));
+  showToast(PUP+' waited by the door for '+(away < MIN ? Math.round(away/1000)+' sec' : fmt(away))+(lost ? '. Activity minutes start over.' : ''));
   save();
 }
 function tick(now){
@@ -393,8 +395,8 @@ function startDay(){
 }
 function takeBreak(){
   if(store.mode === 'free') ping('free', 0, '');
-  const d = day(); d.streakMs = 0; store.mode = 'break'; releaseWake(); ping('away', 0, ''); save(); render();
-  showToast('Focus session ended. Start another one when you are ready.');
+  const d = day(); d.streakMs = 0; resetProgress(d); store.mode = 'break'; releaseWake(); ping('away', 0, ''); save(); render();
+  showToast('Focus session ended. Unfinished activities start over next session.');
 }
 function backToWork(){ const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
 function startFree(){
