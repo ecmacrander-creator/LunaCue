@@ -121,6 +121,13 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
 label{display:flex;flex-direction:column;gap:6px;font-weight:800;font-size:.9rem}
 input{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
 .sub{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800;margin:4px 0 0}
+body.dim{background:#000}
+body.dim .app > :not(.shell){visibility:hidden}
+body.dim .shell{background:#000;box-shadow:none}
+body.dim .lcd{background:#000;box-shadow:none}
+body.dim .brand{color:#22381a}
+body.dim .toast{background:#0c1708;color:#5d8a48}
+body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;font-family:var(--font-display);font-size:.7rem;color:#22381a;margin-top:6px}
 @media (prefers-reduced-motion: no-preference){ .act,.btn{transition:background .15s,border-color .15s,color .15s} .act .fill{transition:width .4s} }
 </style>
 </head>
@@ -399,7 +406,7 @@ document.addEventListener('visibilitychange', () => {
   } else {
     const away = now - (store.hiddenAt || store.lastTick);
     if(away > GRACE) registerAway(away, now);
-    store.lastTick = now; store.hiddenAt = 0; lastFrame = 0;
+    store.lastTick = now; store.hiddenAt = 0; lastFrame = 0; lastTouch = now;
     ping('away', 0, '');
     requestWake(); save(); render();
   }
@@ -532,7 +539,25 @@ const cv = $('#scene'), ctx = cv.getContext('2d');
 const ghost = document.createElement('canvas');
 let W = 0, H = 0, DPR = 1, P = 6, LW = 56, LH = 60, GY = 46, OX = 0, OY = 0, buf = new Uint8Array(LW*LH);
 const C = {};
-function readColors(){ const cs = getComputedStyle(document.documentElement); C.lcd = cs.getPropertyValue('--lcd').trim(); C.on = cs.getPropertyValue('--lcd-on').trim(); C.ghost = cs.getPropertyValue('--lcd-ghost').trim(); buildGhost(); dirty = true; }
+let dimmed = false, lastTouch = Date.now(), swallowClick = false;
+const DIM_AFTER = 60000;
+function readColors(){
+  const cs = getComputedStyle(document.documentElement);
+  if(dimmed){ C.lcd = '#000000'; C.on = '#3E6B2B'; C.ghost = 'rgba(0,0,0,0)'; }
+  else { C.lcd = cs.getPropertyValue('--lcd').trim(); C.on = cs.getPropertyValue('--lcd-on').trim(); C.ghost = cs.getPropertyValue('--lcd-ghost').trim(); }
+  buildGhost(); dirty = true;
+}
+function setDim(on){
+  if(dimmed === on) return;
+  dimmed = on; document.body.classList.toggle('dim', on); readColors();
+}
+function anySheetOpen(){ return [...document.querySelectorAll('.sheet')].some(x => !x.hidden); }
+// First tap while dimmed only wakes the screen; it doesn't press whatever is under your finger.
+document.addEventListener('pointerdown', e => {
+  lastTouch = Date.now();
+  if(dimmed){ setDim(false); swallowClick = true; e.preventDefault(); e.stopPropagation(); }
+}, {capture:true});
+document.addEventListener('click', e => { if(swallowClick){ swallowClick = false; e.preventDefault(); e.stopPropagation(); } }, {capture:true});
 function resize(){
   const r = cv.parentElement.getBoundingClientRect(); DPR = Math.min(window.devicePixelRatio || 1, 2);
   W = r.width; H = r.height; cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
@@ -906,7 +931,9 @@ function frame(){
   const paused = returning || partying || eating || pooping;
   A.cloud += fdt*0.0015;
   if(store.mode === 'playing' && !paused){ A.t += fdt; advance(fdt); }
-  if(W > 0 && (dirty || now - lastDraw >= 110)){
+  if(store.mode === 'playing' && !dimmed && !anySheetOpen() && now - lastTouch > DIM_AFTER && document.visibilityState === 'visible') setDim(true);
+  if(store.mode !== 'playing' && dimmed) setDim(false);
+  if(W > 0 && (dirty || now - lastDraw >= (dimmed ? 250 : 110))){
     lastDraw = now; dirty = false; buf.fill(0);
     if(store.mode !== 'playing' || store.activity == null) A.caption = '';
     if(store.pet.dead) drawGrave(now);
