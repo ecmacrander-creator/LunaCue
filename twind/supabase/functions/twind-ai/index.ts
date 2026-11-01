@@ -1,5 +1,5 @@
 // twind-ai: uses Gemini to write the "talk about this tonight" prompt
-// and Revisit follow-up questions.
+// Revisit follow-up questions, and the Sunday weekly recap.
 // Secrets it needs (Supabase > Edge Functions > Secrets):
 //   GEMINI_API_KEY   (from Google AI Studio)
 //   GEMINI_MODEL     (optional, defaults to gemini-3.8-flash)
@@ -25,7 +25,7 @@ Write warmly and plainly, like a wise friend who knows them, never like a therap
 No cliches, no em dashes, no emojis, no hashtags. Never judge, score or take sides.
 Keep anything intimate tasteful. Reply with only the text asked for.`;
 
-async function gemini(prompt: string): Promise<string | null> {
+async function gemini(prompt: string, asJson = false): Promise<string | null> {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) return null;
   const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
@@ -35,7 +35,10 @@ async function gemini(prompt: string): Promise<string | null> {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.8, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: "low" } },
+      generationConfig: {
+        temperature: 0.8, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: "low" },
+        ...(asJson ? { responseMimeType: "application/json" } : {}),
+      },
     }),
   });
   if (!res.ok) {
@@ -104,6 +107,65 @@ Mention briefly what it is about so they remember, then ask something new that e
 Under 40 words. Address them as "you" (the question is shown to both). Reply with only the question.`;
     const text = await gemini(prompt);
     return json({ question: text, sourceDay: pick.day });
+  }
+
+  if (body.action === "week") {
+    const ws = String(body.week_start ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ws) || new Date(ws + "T12:00:00Z").getUTCDay() !== 1) {
+      return json({ error: "week_start must be a Monday" }, 400);
+    }
+    const end = new Date(new Date(ws + "T12:00:00Z").getTime() + 6 * 864e5).toISOString().slice(0, 10);
+    const { data: couple } = await admin.from("couples").select("tz").eq("id", me.couple_id).maybeSingle();
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: couple?.tz ?? "America/Chicago" }).format(new Date());
+    // The recap opens on Sunday. Before that the week isn't done yet.
+    if (today < end) return json({ summary: null, reason: "not-yet" });
+
+    const { data: days } = await admin.from("days").select("*")
+      .eq("couple_id", me.couple_id).gte("day", ws).lte("day", end).order("day");
+    const { data: answers } = await admin.from("answers").select("day, user_id, body")
+      .eq("couple_id", me.couple_id).gte("day", ws).lte("day", end);
+    const { data: reactions } = await admin.from("reactions").select("day, from_user, reply")
+      .eq("couple_id", me.couple_id).gte("day", ws).lte("day", end);
+    // Intimacy answers never go to Gemini.
+    const shared = (days ?? []).filter((d) =>
+      d.wedge !== "intimacy" && (answers ?? []).filter((a) => a.day === d.day).length >= 2);
+    if (!shared.length) return json({ summary: null, reason: "empty" });
+
+    const { data: cached } = await admin.from("weeks").select("*")
+      .eq("couple_id", me.couple_id).eq("week_start", ws).maybeSingle();
+    if (cached?.summary && cached.revealed_count === shared.length) {
+      return json({ summary: cached.summary, prompt: cached.talk_prompt });
+    }
+
+    const lines = shared.map((d) => {
+      const name = new Date(d.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
+      const said = (answers ?? []).filter((a) => a.day === d.day)
+        .map((a) => `  ${nameOf(a.user_id)}: "${a.body}"`).join("\n");
+      const replies = (reactions ?? []).filter((r) => r.day === d.day && r.reply)
+        .map((r) => `  ${nameOf(r.from_user)} replied: "${r.reply}"`).join("\n");
+      const flags = [(d.saved_by ?? []).length ? "saved to talk about later" : "", d.talked_at ? "they talked about it" : ""]
+        .filter(Boolean).join(", ");
+      return `${name}: "${d.question}"${flags ? ` (${flags})` : ""}\n${said}${replies ? "\n" + replies : ""}`;
+    }).join("\n\n");
+
+    const prompt = `Here is their week of questions and answers:
+
+${lines}
+
+Reply with JSON: {"summary": string, "prompt": string}
+- summary: 2 or 3 sentences, under 70 words. Name a theme or two from the week, one place they lined up and one place they saw things differently. Use their names. Warm, specific, never a score or verdict.
+- prompt: one "talk about this tonight" question, under 35 words. If anything was saved to talk about later and not yet talked about, build it from that. Otherwise pick the thread most worth pulling on.`;
+    const raw = await gemini(prompt, true);
+    let out: { summary?: string; prompt?: string } = {};
+    try { out = JSON.parse(raw ?? "{}"); } catch { out = {}; }
+    const clean = (t?: string) => (t ?? "").replace(/\s*—\s*/g, ", ").trim() || null;
+    const summary = clean(out.summary), talk = clean(out.prompt);
+    if (!summary) return json({ summary: null, reason: "ai-failed" });
+    await admin.from("weeks").upsert({
+      couple_id: me.couple_id, week_start: ws, summary, talk_prompt: talk,
+      revealed_count: shared.length, created_at: new Date().toISOString(),
+    });
+    return json({ summary, prompt: talk });
   }
 
   return json({ error: "unknown action" }, 400);

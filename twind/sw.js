@@ -1,5 +1,5 @@
 // twind service worker: offline shell + push notifications.
-const CACHE = "twind-v3";
+const CACHE = "twind-v4";
 const ASSETS = ["./", "index.html", "styles.css", "app.js", "config.js", "questions.json", "mark.svg", "icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -38,7 +38,7 @@ self.addEventListener("push", (e) => {
       icon: "icon-192.png",
       badge: "icon-192.png",
       tag: data.tag || "twind",
-      data: { url: self.registration.scope },
+      data: { url: new URL(data.url || "", self.registration.scope).href },
     }),
   );
 });
@@ -48,7 +48,13 @@ self.addEventListener("notificationclick", (e) => {
   const target = (e.notification.data && e.notification.data.url) || self.registration.scope;
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const c of list) if (c.url.startsWith(target) && "focus" in c) return c.focus();
+      // App already open: bring it forward and tell it which screen to show.
+      for (const c of list) {
+        if (c.url.startsWith(self.registration.scope) && "focus" in c) {
+          c.postMessage({ type: "open", url: target });
+          return c.focus();
+        }
+      }
       return self.clients.openWindow(target);
     }),
   );

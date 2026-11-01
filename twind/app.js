@@ -14,6 +14,8 @@
     history: null, used: new Set(), rotation: 0, rotationKey: "", spinning: false,
     busy: false, pushOn: false, talkLoading: false, editing: false,
     authMode: "signin", recovery: false, pairMode: null, notice: null, dirty: false,
+    rx: {}, catchup: [], dayView: null, back: "today", week: null, weekStart: null,
+    replyEdit: null, talkTried: new Set(), pendingDay: null,
   };
 
   // ---------- small helpers ----------
@@ -40,6 +42,19 @@
   function prettyDate(iso, opts = { weekday: "long", month: "short", day: "numeric" }) {
     return new Date(iso + "T12:00:00").toLocaleDateString("en-US", opts);
   }
+  function addDays(iso, n) {
+    const d = new Date(iso + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  // Weeks run Monday to Sunday.
+  function weekStartOf(iso) {
+    const dow = new Date(iso + "T12:00:00Z").getUTCDay();
+    return addDays(iso, -((dow + 6) % 7));
+  }
+  function isLate(ans) {
+    return !!ans && !!S.couple && localISO(S.couple.tz, new Date(ans.created_at)) > ans.day;
+  }
   function fmtTime(hhmm) {
     const [h, m] = hhmm.split(":").map(Number);
     return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
@@ -52,6 +67,12 @@
     wheel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 3.5v17M4.6 7.8l14.8 8.4M19.4 7.8 4.6 16.2"></path></svg>',
     lock: '<svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#7A2E3B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>',
     check: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E9C58E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>',
+    week: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2"></path></svg>',
+    heart: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7.5 3c0 5.4-7.5 10-7.5 10z"></path></svg>',
+    more: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="1.2"></circle><circle cx="12" cy="12" r="1.2"></circle><circle cx="18" cy="12" r="1.2"></circle></svg>',
+    bookmark: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"></path></svg>',
+    back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>',
+    next: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>',
     chat: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>',
   };
 
@@ -140,6 +161,51 @@
     ]);
     S.today = day || null;
     S.answers = answers || [];
+    await Promise.all([loadReactions([S.todayISO]), loadCatchup()]);
+  }
+  function keepReactions(list) {
+    (list || []).forEach((r) => { S.rx[r.day + "|" + r.from_user] = r; });
+  }
+  const rxFrom = (day, uid) => S.rx[day + "|" + uid] || null;
+  async function loadReactions(days) {
+    if (!days.length) return;
+    const { data } = await S.sb.from("reactions").select("*").in("day", days);
+    keepReactions(data);
+  }
+  // Past days (last week) where your partner answered and you didn't.
+  async function loadCatchup() {
+    if (!S.couple || !S.partner) return;
+    const { data } = await S.sb.from("days").select("*")
+      .gte("day", addDays(S.todayISO, -7)).lt("day", S.todayISO).eq("locked", true).order("day", { ascending: false });
+    S.catchup = (data || []).filter((d) => (d.answered || []).includes(S.partner.user_id) && !(d.answered || []).includes(S.user.id));
+  }
+  async function loadDay(iso) {
+    const [{ data: day }, { data: answers }] = await Promise.all([
+      S.sb.from("days").select("*").eq("day", iso).maybeSingle(),
+      S.sb.from("answers").select("*").eq("day", iso),
+    ]);
+    await loadReactions([iso]);
+    S.dayView = { iso, day: day || null, answers: answers || [] };
+  }
+  async function loadWeek(ws) {
+    const end = addDays(ws, 6);
+    const [{ data: days }, { data: answers }, { data: cached }] = await Promise.all([
+      S.sb.from("days").select("*").gte("day", ws).lte("day", end).order("day"),
+      S.sb.from("answers").select("*").gte("day", ws).lte("day", end),
+      S.sb.from("weeks").select("*").eq("week_start", ws).maybeSingle(),
+    ]);
+    await loadReactions((days || []).map((d) => d.day));
+    const prev = S.week && S.week.ws === ws ? S.week : null;
+    S.week = {
+      ws, days: days || [], answers: answers || [],
+      recap: cached && cached.summary ? { summary: cached.summary, prompt: cached.talk_prompt, count: cached.revealed_count } : prev?.recap || null,
+      recapTried: prev?.recapTried || false, recapLoading: false,
+    };
+  }
+  // Keep one change (talk prompt, saved, talked) in sync across every screen that shows that day.
+  function patchDay(iso, fields) {
+    const lists = [S.today ? [S.today] : [], S.dayView?.day ? [S.dayView.day] : [], S.week?.days || [], S.history?.days || [], S.catchup];
+    lists.forEach((l) => l.forEach((d) => { if (d.day === iso) Object.assign(d, fields); }));
   }
   async function loadUsed() {
     const { data } = await S.sb.from("days").select("question").order("day", { ascending: false }).limit(400);
@@ -152,6 +218,7 @@
     if (list.length) {
       const res = await S.sb.from("answers").select("*").in("day", list.map((d) => d.day));
       answers = res.data || [];
+      await loadReactions(list.map((d) => d.day));
     }
     S.history = { days: list, answers };
   }
@@ -160,11 +227,17 @@
     try {
       await loadPair();
       if (S.me && S.members.length === 2) await loadToday();
-      if (S.view === "history" && S.me) await loadHistory();
+      if (S.me && S.members.length === 2) await reloadView();
     } catch (e) {
       toast(e.message || "Couldn't reach twind. Check your connection.");
     }
     render();
+  }
+
+  async function reloadView() {
+    if (S.view === "history") await loadHistory();
+    else if (S.view === "week" && S.weekStart) await loadWeek(S.weekStart);
+    else if (S.view === "day" && S.dayView) await loadDay(S.dayView.iso);
   }
 
   // ---------- live updates ----------
@@ -178,7 +251,7 @@
         if (S.spinning) return;
         await loadPair();
         await loadToday();
-        if (S.view === "history") await loadHistory();
+        await reloadView();
         safeRender();
       }, 300);
     };
@@ -186,6 +259,7 @@
       .on("postgres_changes", { event: "*", schema: "public", table: "days", filter }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "answers", filter }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "members", filter }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reactions", filter }, onChange)
       .subscribe();
   }
   // Don't wipe out something being typed.
@@ -201,8 +275,8 @@
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 
   // ---------- functions (notifications + AI) ----------
-  function notify(event) {
-    S.sb.functions.invoke("twind-notify", { body: { event } }).catch(() => {});
+  function notify(event, extra = {}) {
+    S.sb.functions.invoke("twind-notify", { body: { event, ...extra } }).catch(() => {});
   }
   async function ai(body, ms = 12000) {
     try {
@@ -253,7 +327,7 @@
   }
   function tabs() {
     const t = (id, label) => `<button type="button" data-action="tab" data-tab="${id}" ${S.view === id ? 'aria-current="page"' : ""}>${ICON[id]}${label}</button>`;
-    return `<div class="tabs"><nav aria-label="Main">${t("today", "Today")}${t("history", "History")}${t("wheel", "Wheel")}</nav></div>`;
+    return `<div class="tabs"><nav aria-label="Main">${t("today", "Today")}${t("week", "Week")}${t("history", "History")}${t("wheel", "Wheel")}</nav></div>`;
   }
   function render() {
     if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY) return renderUnconfigured();
@@ -262,6 +336,8 @@
     if (!S.me) return renderPair();
     if (S.members.length < 2) return renderInvite();
     if (S.view === "history") return renderHistory();
+    if (S.view === "week") return renderWeek();
+    if (S.view === "day") return renderDay();
     if (S.view === "wheel") return renderWheelSettings();
     return renderToday();
   }
@@ -323,6 +399,64 @@
         <p class="sub">This screen updates on its own once they join.</p>
         <button class="btn link" type="button" data-action="leave">Have a code from your spouse instead?</button>
       </div></main>`;
+  }
+
+  // ---------- shared pieces: answers, reactions, save ----------
+  function reactionTags(r, who) {
+    if (!r || (!r.heart && !r.more && !r.reply)) return "";
+    const tags = [
+      r.heart ? `<span class="rx-tag">${ICON.heart} ${who} loved this</span>` : "",
+      r.more ? `<span class="rx-tag">${ICON.more} ${who} ${who === "You" ? "want" : "wants"} to hear more</span>` : "",
+    ].join("");
+    return `<div class="rx-foot">${tags ? `<div class="rx-row">${tags}</div>` : ""}${r.reply ? `<div class="rx-reply"><b>${who}:</b> ${esc(r.reply)}</div>` : ""}</div>`;
+  }
+  function reactControls(day, r) {
+    const p = esc(S.partner.display_name);
+    const btn = (kind, label) => `<button class="rx-btn" type="button" data-action="react" data-day="${day}" data-kind="${kind}" aria-pressed="${!!(r && r[kind])}">${ICON[kind]}<span>${label}</span></button>`;
+    const reply = r && r.reply && S.replyEdit !== day
+      ? `<div class="rx-reply"><b>You:</b> ${esc(r.reply)} <button class="btn link sm" type="button" data-action="reply-edit" data-day="${day}">Edit</button></div>`
+      : `<form class="rx-form" data-form="reply" data-day="${day}">
+          <input class="input" name="reply" maxlength="280" autocomplete="off" placeholder="Reply to ${p}" aria-label="Reply to ${p}" value="${esc(r?.reply || "")}">
+          <button class="btn sm" type="submit">Send</button>
+        </form>`;
+    return `<div class="rx-foot"><div class="rx-row">${btn("heart", "Love it")}${btn("more", "Tell me more")}</div>${reply}</div>`;
+  }
+  // interactive: show heart / tell me more / reply on your partner's answer.
+  function answerBlock(ans, mine, interactive = true) {
+    if (!ans) return "";
+    const p = esc(S.partner.display_name);
+    const late = isLate(ans) ? '<span class="late">Answered late</span>' : "";
+    const foot = mine
+      ? reactionTags(rxFrom(ans.day, S.partner.user_id), p)
+      : interactive ? reactControls(ans.day, rxFrom(ans.day, S.user.id)) : reactionTags(rxFrom(ans.day, S.user.id), "You");
+    return `<div class="card answer-card">
+      <div class="who" style="color: ${mine ? "var(--wine)" : "var(--plum)"}">${mine ? "You" : p}${late}</div>
+      <p>${esc(ans.body)}</p>${foot}
+    </div>`;
+  }
+  function saveBtn(d) {
+    const by = d.saved_by || [];
+    const mine = by.includes(S.user.id), theirs = by.includes(S.partner.user_id);
+    const label = mine ? "Saved for later" : theirs ? `${esc(S.partner.display_name)} saved this for later` : "Save for later";
+    return `<button class="btn ghost save" type="button" data-action="save" data-day="${d.day}" aria-pressed="${mine}">${ICON.bookmark}${label}</button>`;
+  }
+  function talkBlock(d) {
+    if (!d.talk_prompt && !S.talkLoading && !S.talkTried.has(d.day)) loadTalkPrompt(d.day);
+    const prompt = d.talk_prompt || "Pick the one line from each other's answer that surprised you, and start there.";
+    return `<div class="card dark stack">
+        <div class="label" style="display:flex; align-items:center; gap:8px">${ICON.chat} Talk about this tonight</div>
+        <p style="margin:0; font-size:16px; line-height:1.45">${esc(prompt)}</p>
+      </div>
+      ${d.talked_at
+        ? `<div class="stack center"><div class="done-badge">${ICON.check}</div><p class="sub">You talked about this. It's saved in your history.</p></div>`
+        : `<button class="btn" type="button" data-action="talked" data-day="${d.day}" ${S.busy ? "disabled" : ""}>We talked about it</button>`}`;
+  }
+  function catchupCards() {
+    return S.catchup.slice(0, 2).map((d) => `
+      <button class="card paper catchup" type="button" data-action="open-day" data-day="${d.day}">
+        <span class="text"><b>${esc(S.partner.display_name)} answered ${esc(prettyDate(d.day, { weekday: "long" }))}'s question</b>
+        <span>Read theirs and add yours</span></span>${ICON.next}
+      </button>`).join("");
   }
 
   function stageOf() {
@@ -388,7 +522,7 @@
         <div class="stack">
           ${chip(d.spinner === S.user.id ? " · you spun" : ` · ${partner} spun`)}
           <h1 class="question" style="font-size: 30px">${esc(d.question)}</h1>
-          <p class="sub" style="color: var(--plum)">${theirs ? `${partner} already answered. Yours reveals both.` : `${partner} can't see your answer until they answer too.`}</p>
+          <p class="sub" style="color: var(--plum)">${theirs ? `${partner} already answered. Yours reveals both.` : `${partner} sees your answer once they answer too, or at midnight.`}</p>
         </div>
         <form class="stack lg" data-form="answer" style="flex: 1">
           <div class="field" style="flex: 1">
@@ -403,31 +537,21 @@
       body = `<div class="grow">
           ${ICON.lock}
           <h1>Your answer is in</h1>
-          <p class="sub">You'll both see each other's answers as soon as ${partner} answers.</p>
+          <p class="sub">You'll both see each other's answers as soon as ${partner} answers. If they don't get to it, yours unlocks for them at midnight.</p>
           <button class="btn ghost" type="button" data-action="nudge" style="max-width: 280px" ${recently || S.busy ? "disabled" : ""}>${recently ? `Nudged ${partner}` : `Nudge ${partner}`}</button>
           <button class="btn link" type="button" data-action="edit">Edit my answer</button>
         </div>${pushNudge()}`;
     } else if (stage === "reveal") {
       const mine = S.answers.find((a) => a.user_id === S.user.id);
       const theirs = S.answers.find((a) => a.user_id === S.partner.user_id);
-      if (!d.talk_prompt && !S.talkLoading && S.talkTried !== d.day) loadTalkPrompt(d.day);
-      const prompt = d.talk_prompt || "Pick the one line from each other's answer that surprised you, and start there.";
       body = `
         <div class="stack">${chip()}<p class="question sm">${esc(d.question)}</p></div>
-        <div class="stack">
-          <div class="card answer-card"><div class="who" style="color: var(--wine)">You</div><p>${esc(mine?.body)}</p></div>
-          <div class="card answer-card"><div class="who" style="color: var(--plum)">${partner}</div><p>${esc(theirs?.body)}</p></div>
-        </div>
-        <div class="card dark stack push">
-          <div class="label" style="display:flex; align-items:center; gap:8px">${ICON.chat} Talk about this tonight</div>
-          <p style="margin:0; font-size:16px; line-height:1.45">${esc(prompt)}</p>
-        </div>
-        ${d.talked_at
-          ? `<div class="stack center"><div class="done-badge">${ICON.check}</div><p class="sub">You talked about this. It's saved in your history.</p></div>`
-          : `<button class="btn" type="button" data-action="talked" ${S.busy ? "disabled" : ""}>We talked about it</button>`}`;
+        <div class="stack">${answerBlock(mine, true)}${answerBlock(theirs, false)}</div>
+        ${saveBtn(d)}
+        <div class="stack lg push">${talkBlock(d)}</div>`;
     }
 
-    $app.innerHTML = `<main class="shell">${header(`<span class="date">${esc(prettyDate(S.todayISO))}</span>`)}${body}</main>${tabs()}`;
+    $app.innerHTML = `<main class="shell">${header(`<span class="date">${esc(prettyDate(S.todayISO))}</span>`)}${catchupCards()}${body}</main>${tabs()}`;
   }
 
   function statusFor(d) {
@@ -461,7 +585,9 @@
       const w = wedgeById(d.wedge), st = statusFor(d);
       const mine = answers.find((a) => a.day === d.day && a.user_id === S.user.id);
       const theirs = answers.find((a) => a.day === d.day && a.user_id === S.partner.user_id);
-      const hidden = !theirs && (d.answered || []).includes(S.partner.user_id);
+      const isToday = d.day === S.todayISO;
+      const hidden = !theirs && isToday && (d.answered || []).includes(S.partner.user_id);
+      const canLate = !isToday && d.locked && !mine;
       return `<details class="day">
         <summary>
           <span class="row"><span class="chip" style="background:${w.color}; font-size:12px; padding:3px 10px">${esc(w.label)}</span>
@@ -469,11 +595,12 @@
           <p class="q">${esc(d.question)}</p>
         </summary>
         <div class="body">
-          ${mine ? `<div class="card answer-card"><div class="who" style="color: var(--wine)">You</div><p>${esc(mine.body)}</p></div>` : ""}
-          ${theirs ? `<div class="card answer-card"><div class="who" style="color: var(--plum)">${esc(S.partner.display_name)}</div><p>${esc(theirs.body)}</p></div>` : ""}
-          ${hidden ? `<p class="sub">${esc(S.partner.display_name)}'s answer shows once you answer too.</p>` : ""}
+          ${answerBlock(mine, true, false)}
+          ${answerBlock(theirs, false, false)}
+          ${hidden ? `<p class="sub">${esc(S.partner.display_name)}'s answer shows once you answer, or at midnight.</p>` : ""}
           ${d.talk_prompt ? `<p class="sub"><b>Talk prompt:</b> ${esc(d.talk_prompt)}</p>` : ""}
           ${!mine && !theirs && !hidden ? '<p class="sub">No answers that day.</p>' : ""}
+          ${!isToday && (canLate || theirs) ? `<button class="btn link" type="button" data-action="open-day" data-day="${d.day}" style="align-self:flex-start">${canLate ? "Answer it now" : "React or reply"}</button>` : ""}
         </div>
       </details>`;
     };
@@ -488,6 +615,121 @@
       <div class="stack">
         ${days.length ? days.map(item).join("") : '<p class="sub">Your first conversation will show up here.</p>'}
       </div>
+    </main>${tabs()}`;
+  }
+
+  function backBar(right = "") {
+    return `<header class="top"><button class="btn link back" type="button" data-action="back">${ICON.back}Back</button>${right}</header>`;
+  }
+
+  function renderDay() {
+    const v = S.dayView;
+    if (!v || !v.answers) {
+      $app.innerHTML = `<main class="shell">${backBar()}<p class="sub">Loading…</p></main>${tabs()}`;
+      return;
+    }
+    const d = v.day, p = esc(S.partner.display_name);
+    if (!d) {
+      $app.innerHTML = `<main class="shell">${backBar()}<div class="grow"><h1>No question that day</h1></div></main>${tabs()}`;
+      return;
+    }
+    const w = wedgeById(d.wedge);
+    const mine = v.answers.find((a) => a.user_id === S.user.id);
+    const theirs = v.answers.find((a) => a.user_id === S.partner.user_id);
+    const draftKey = "twind-draft-" + d.day;
+    let body = "";
+    if (!d.locked) {
+      body = `<p class="sub">This question was never locked in.</p>`;
+    } else {
+      body = `<div class="stack">${theirs ? answerBlock(theirs, false) : ""}${mine ? answerBlock(mine, true) : ""}</div>`;
+      if (!mine) {
+        body += `<form class="stack lg" data-form="late" data-day="${d.day}">
+          <div class="field">
+            <label for="late-ans">Your answer</label>
+            <textarea class="input" id="late-ans" name="body" data-draft="${esc(draftKey)}" placeholder="It's not too late. Be honest." maxlength="5000" required>${esc(store.get(draftKey) || "")}</textarea>
+          </div>
+          <button class="btn" type="submit" ${S.busy ? "disabled" : ""}>Add my answer</button>
+          <p class="sub" style="text-align:center; font-size: 13px">${p} gets a heads-up. It shows as answered late.</p>
+        </form>`;
+      } else if (!theirs) {
+        body += `<p class="sub">${p} didn't answer this one.</p>`;
+      }
+      if (mine || theirs) body += saveBtn(d);
+      if (mine && theirs) body += `<div class="stack lg">${talkBlock(d)}</div>`;
+    }
+    $app.innerHTML = `<main class="shell">${backBar(`<span class="date">${esc(prettyDate(d.day))}</span>`)}
+      <div class="stack"><span class="chip" style="background:${w.color}">${esc(w.label)}</span>
+      <h1 class="question" style="font-size: 28px">${esc(d.question)}</h1></div>
+      ${body}
+    </main>${tabs()}`;
+  }
+
+  function renderWeek() {
+    if (!S.weekStart) S.weekStart = weekStartOf(S.todayISO);
+    const ws = S.weekStart, end = addDays(ws, 6);
+    const range = `${prettyDate(ws, { month: "short", day: "numeric" })} to ${prettyDate(end, { month: "short", day: "numeric" })}`;
+    const isCurrent = S.todayISO >= ws && S.todayISO <= end;
+    const nav = `<div class="week-nav">
+        <button class="icon-btn" type="button" data-action="week-prev" aria-label="Previous week">${ICON.back}</button>
+        <span>${isCurrent ? "This week" : esc(range)}</span>
+        <button class="icon-btn" type="button" data-action="week-next" aria-label="Next week" ${isCurrent ? "disabled" : ""}>${ICON.next}</button>
+      </div>`;
+    if (!S.week || S.week.ws !== ws) {
+      $app.innerHTML = `<main class="shell">${header()}<h1>Our week</h1>${nav}<p class="sub">Loading…</p></main>${tabs()}`;
+      loadWeek(ws).then(render);
+      return;
+    }
+    const { days, answers } = S.week;
+    const both = (d) => answers.filter((a) => a.day === d.day).length >= 2;
+    const bothCount = days.filter(both).length;
+    const talks = days.filter((d) => d.talked_at).length;
+    const done = S.todayISO >= end;
+    const shared = days.filter((d) => both(d) && d.wedge !== "intimacy").length;
+
+    const row = (d) => {
+      const w = wedgeById(d.wedge), st = statusFor(d);
+      const saved = (d.saved_by || []).length ? ` · ${ICON.bookmark}` : "";
+      return `<button class="week-row" type="button" data-action="open-day" data-day="${d.day}">
+        <span class="wk-day"><b>${esc(prettyDate(d.day, { weekday: "short" }))}</b>${esc(prettyDate(d.day, { day: "numeric" }))}</span>
+        <span class="dot" style="background:${w.color}" aria-hidden="true"></span>
+        <span class="text"><span class="q">${esc(d.question)}</span><span class="status ${st.cls}">${esc(st.text)}${saved}</span></span>
+      </button>`;
+    };
+    const list = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = addDays(ws, i);
+      if (iso > S.todayISO) break;
+      const d = days.find((x) => x.day === iso);
+      list.push(d ? row(d) : `<div class="week-row empty"><span class="wk-day"><b>${esc(prettyDate(iso, { weekday: "short" }))}</b>${esc(prettyDate(iso, { day: "numeric" }))}</span><span class="text"><span class="status">No question this day</span></span></div>`);
+    }
+
+    let recap = "";
+    if (!done) {
+      recap = `<div class="card paper"><p class="sub" style="color: var(--ink)">Your recap fills in Sunday evening. Here's the week so far.</p></div>`;
+    } else if (shared) {
+      const r = S.week.recap;
+      if ((!r || r.count !== shared) && !S.week.recapLoading && S.week.recapTried !== shared) loadRecap(ws, shared);
+      recap = r
+        ? `<div class="card dark stack">
+            <div class="label">Your week</div>
+            <p style="margin:0; font-size:16px; line-height:1.45">${esc(r.summary)}</p>
+            ${r.prompt ? `<div class="label" style="display:flex; align-items:center; gap:8px; margin-top:6px">${ICON.chat} Talk about this tonight</div>
+            <p style="margin:0; font-size:16px; line-height:1.45">${esc(r.prompt)}</p>` : ""}
+          </div>`
+        : `<div class="card dark"><p style="margin:0" class="sub">${S.week.recapLoading ? "Writing your recap…" : "Your recap couldn't load. Pull it up again in a bit."}</p></div>`;
+    }
+
+    const saved = days.filter((d) => (d.saved_by || []).length);
+    $app.innerHTML = `<main class="shell">${header()}
+      <h1>Our week</h1>
+      ${nav}
+      <div class="stats">
+        <div class="stat"><b>${bothCount} of ${list.length}</b><span>days you both answered</span></div>
+        <div class="stat"><b>${talks}</b><span>talk${talks === 1 ? "" : "s"} this week</span></div>
+      </div>
+      ${recap}
+      ${saved.length ? `<div class="stack"><div class="label">Saved for later</div>${saved.map(row).join("")}</div>` : ""}
+      <div class="stack"><div class="label">Day by day</div>${list.reverse().join("")}</div>
     </main>${tabs()}`;
   }
 
@@ -545,13 +787,89 @@
   // ---------- actions ----------
   async function loadTalkPrompt(day) {
     S.talkLoading = true;
-    S.talkTried = day;
+    S.talkTried.add(day);
     const res = await ai({ action: "talk", day }, 20000);
     S.talkLoading = false;
-    if (res && res.prompt && S.today && S.today.day === day) {
-      S.today.talk_prompt = res.prompt;
+    if (res && res.prompt) {
+      patchDay(day, { talk_prompt: res.prompt });
       safeRender();
     }
+  }
+
+  async function loadRecap(ws, shared) {
+    S.week.recapLoading = true;
+    S.week.recapTried = shared;
+    const res = await ai({ action: "week", week_start: ws }, 30000);
+    if (!S.week || S.week.ws !== ws) return;
+    S.week.recapLoading = false;
+    if (res && res.summary) S.week.recap = { summary: res.summary, prompt: res.prompt, count: shared };
+    safeRender();
+  }
+
+  async function openDay(iso) {
+    if (!iso) return;
+    if (iso === S.todayISO) { S.view = "today"; render(); return; }
+    if (S.view !== "day") S.back = S.view;
+    S.view = "day";
+    S.replyEdit = null;
+    S.dayView = { iso, day: null, answers: null };
+    render();
+    document.querySelector(".shell")?.scrollTo(0, 0);
+    try { await loadDay(iso); } catch (e) { toast(e.message || "Couldn't load that day."); }
+    render();
+  }
+
+  async function doReact(day, kind) {
+    const before = rxFrom(day, S.user.id);
+    const next = { heart: !!before?.heart, more: !!before?.more, reply: before?.reply || null };
+    next[kind] = !next[kind];
+    keepReactions([{ ...(before || {}), day, from_user: S.user.id, ...next }]);
+    render();
+    const { data, error } = await S.sb.rpc("react", { p_day: day, p_heart: next.heart, p_more: next.more, p_reply: next.reply });
+    if (error) {
+      if (before) keepReactions([before]); else delete S.rx[day + "|" + S.user.id];
+      toast(error.message); render(); return;
+    }
+    keepReactions([data]);
+    if (next[kind]) notify("reacted", { day, kind });
+  }
+
+  async function sendReply(form) {
+    const day = form.dataset.day;
+    const text = form.reply.value.trim();
+    const before = rxFrom(day, S.user.id);
+    if ((before?.reply || "") === text) { S.replyEdit = null; render(); return; }
+    const { data, error } = await S.sb.rpc("react", { p_day: day, p_heart: !!before?.heart, p_more: !!before?.more, p_reply: text || null });
+    if (error) { toast(error.message); return; }
+    keepReactions([data]);
+    S.replyEdit = null;
+    form.reply.blur();
+    if (text) { notify("reacted", { day, kind: "reply" }); toast(`Reply sent to ${S.partner.display_name}.`); }
+    render();
+  }
+
+  async function toggleSave(day) {
+    const { data, error } = await S.sb.rpc("toggle_save", { p_day: day });
+    if (error) { toast(error.message); return; }
+    patchDay(day, { saved_by: data || [] });
+    if ((data || []).includes(S.user.id)) toast("Saved. It'll show up in your weekly review.");
+    render();
+  }
+
+  async function submitLate(form) {
+    const day = form.dataset.day;
+    const body = form.body.value.trim();
+    if (!body) return;
+    S.busy = true; render();
+    const { error } = await S.sb.rpc("submit_late_answer", { p_day: day, p_body: body });
+    S.busy = false;
+    if (error) { toast(error.message); render(); return; }
+    store.del("twind-draft-" + day);
+    notify("answered", { day });
+    await Promise.all([loadDay(day), loadCatchup()]);
+    S.history = null;
+    if (S.week) S.week.ws = null;
+    render();
   }
 
   async function doSpin() {
@@ -619,11 +937,13 @@
     render();
   }
 
-  async function markTalked() {
+  async function markTalked(el) {
+    const day = el?.dataset?.day || S.today.day;
     S.busy = true; render();
-    const { error } = await S.sb.rpc("mark_talked", { p_day: S.today.day });
+    const { error } = await S.sb.rpc("mark_talked", { p_day: day });
     S.busy = false;
     if (error) toast(error.message);
+    else patchDay(day, { talked_at: new Date().toISOString() });
     await loadToday();
     S.history = null;
     render();
@@ -638,7 +958,19 @@
   }
 
   const handlers = {
-    tab: (el) => { S.view = el.dataset.tab; if (S.view === "history") S.history = null; render(); window.scrollTo(0, 0); },
+    tab: (el) => {
+      S.view = el.dataset.tab;
+      if (S.view === "history") S.history = null;
+      if (S.view === "week") { S.week = null; S.weekStart = weekStartOf(S.todayISO); }
+      render(); window.scrollTo(0, 0);
+    },
+    "open-day": (el) => openDay(el.dataset.day),
+    back: () => { S.view = S.back || "today"; render(); },
+    "week-prev": () => { S.weekStart = addDays(S.weekStart, -7); render(); },
+    "week-next": () => { S.weekStart = addDays(S.weekStart, 7); render(); },
+    react: (el) => doReact(el.dataset.day, el.dataset.kind),
+    "reply-edit": (el) => { S.replyEdit = el.dataset.day; render(); document.querySelector(`form[data-day="${el.dataset.day}"] input`)?.focus(); },
+    save: (el) => toggleSave(el.dataset.day),
     spin: doSpin,
     lock: doLock,
     talked: markTalked,
@@ -720,6 +1052,8 @@
     e.preventDefault();
     const form = e.target, kind = form.dataset.form;
     if (kind === "answer") return submitAnswer(form);
+    if (kind === "late") return submitLate(form);
+    if (kind === "reply") return sendReply(form);
     S.busy = true; render();
     try {
       if (kind === "auth") {
@@ -763,10 +1097,28 @@
     }
     await checkPush();
     render();
+    if (S.pendingDay && S.members.length === 2) { const d = S.pendingDay; S.pendingDay = null; openDay(d); }
+  }
+
+  // Links from notifications: ?view=week or ?day=YYYY-MM-DD
+  function readLink(url) {
+    let q;
+    try { q = new URL(url, location.href).searchParams; } catch { return false; }
+    const day = q.get("day");
+    if (q.get("view") === "week") { S.view = "week"; S.week = null; S.weekStart = null; return true; }
+    if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) { S.pendingDay = day; return true; }
+    return false;
   }
 
   async function start() {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+      navigator.serviceWorker.addEventListener("message", (e) => {
+        if (!e.data || e.data.type !== "open" || !readLink(e.data.url) || !S.me) return;
+        if (S.pendingDay) { const d = S.pendingDay; S.pendingDay = null; openDay(d); } else render();
+      });
+    }
+    if (readLink(location.href)) history.replaceState(null, "", location.pathname);
     try {
       S.bank = await (await fetch("questions.json", { cache: "no-cache" })).json();
     } catch {
