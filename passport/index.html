@@ -1,0 +1,638 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Passport Photo Booth</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@500;600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-column booth, square frame on top, controls stacked below; passport-cover navy with gold-foil accent */
+:root{
+  --bg:#F3F2EE; --paper:#FFFFFF; --ink:#16213A; --muted:#5B6478; --line:#D9DAD8;
+  --navy:#1C2C4F; --gold:#A8823A; --gold-soft:#F1E8D6;
+  --pass:#1F7A4C; --pass-bg:#E3F2EA; --warn:#9A6400; --warn-bg:#FBF0DA; --fail:#B3261E; --fail-bg:#FBE4E2;
+  --guide:#F5D27A; --scrim:rgba(14,22,40,.55);
+  --f-display:"Spectral SC", Georgia, "Times New Roman", serif;
+  --f-body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1628; --paper:#17203A; --ink:#ECEAE3; --muted:#A3AABB; --line:#2C3754;
+  --navy:#B9C6E4; --gold:#D6B26A; --gold-soft:#2C2A22;
+  --pass:#6FD39E; --pass-bg:#173528; --warn:#F0C066; --warn-bg:#3A2E14; --fail:#FF8A80; --fail-bg:#3D1D1D;
+  --guide:#F5D27A; --scrim:rgba(6,10,20,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1628; --paper:#17203A; --ink:#ECEAE3; --muted:#A3AABB; --line:#2C3754;
+  --navy:#B9C6E4; --gold:#D6B26A; --gold-soft:#2C2A22;
+  --pass:#6FD39E; --pass-bg:#173528; --warn:#F0C066; --warn-bg:#3A2E14; --fail:#FF8A80; --fail-bg:#3D1D1D;
+  --guide:#F5D27A; --scrim:rgba(6,10,20,.6); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px}
+h1{font-family:var(--f-display);font-weight:600;font-size:26px;letter-spacing:.04em;margin:0;color:var(--navy);text-wrap:balance}
+.spec{font-family:var(--f-mono);font-size:11px;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;text-align:right}
+h2{font-family:var(--f-display);font-weight:600;font-size:18px;letter-spacing:.04em;margin:0;color:var(--navy)}
+p{margin:0}
+.muted{color:var(--muted);font-size:13.5px}
+.frame{position:relative;width:100%;max-width:100%;aspect-ratio:1/1;background:#cfd2d6;border-radius:6px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.frame video,.frame canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.frame video{object-fit:cover;transform:scaleX(-1)}
+.frame svg.guide{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:var(--scrim);color:#fff;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+.hint.ok{background:rgba(31,122,76,.92)}
+.count{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:96px;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.btns{display:flex;flex-wrap:wrap;gap:10px}
+button,.filebtn{font:600 15px/1 var(--f-body);border-radius:8px;padding:13px 16px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px}
+button.primary,.filebtn.primary{background:var(--navy);border-color:var(--navy);color:var(--bg)}
+button.gold{background:var(--gold);border-color:var(--gold);color:#16213A}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.grow{flex:1 1 140px}
+.filebtn input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.filebtn{position:relative}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.rules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;font-size:13.5px}
+.rules div{display:flex;gap:8px;min-width:0}
+.rules b{font-family:var(--f-mono);font-weight:500;color:var(--gold);font-size:12px;flex:none;width:52px}
+@media (max-width:400px){.rules{grid-template-columns:1fr}}
+.slider{display:grid;grid-template-columns:64px 1fr 52px;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.slider output{font-family:var(--f-mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--gold)}
+.summary{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:10px;border:1px solid var(--line);background:var(--paper)}
+.stamp{flex:none;width:58px;height:58px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font-family:var(--f-display);font-size:12px;letter-spacing:.06em;text-align:center;line-height:1.1;transform:rotate(-8deg)}
+.summary.pass{color:var(--pass)} .summary.warn{color:var(--warn)} .summary.fail{color:var(--fail)}
+.summary .txt{color:var(--ink);min-width:0}
+.summary .txt strong{display:block;font-size:16px}
+ul.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+ul.checks li{display:grid;grid-template-columns:62px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:start}
+ul.checks li:first-child{border-top:0}
+.pill{font:600 10.5px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 0;border-radius:4px;text-align:center}
+.pill.pass{background:var(--pass-bg);color:var(--pass)} .pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.fail{background:var(--fail-bg);color:var(--fail)} .pill.info{background:var(--gold-soft);color:var(--gold)}
+.ck-name{font-weight:600;font-size:14px}
+.ck-detail{color:var(--muted);font-size:13px}
+.ck-detail .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+label.confirm{display:flex;gap:10px;align-items:flex-start;font-size:14px;padding:6px 0;cursor:pointer}
+label.confirm input{width:20px;height:20px;flex:none;accent-color:var(--navy);margin-top:1px}
+.result-img{display:flex;gap:14px;align-items:flex-start}
+.result-img canvas{width:132px;height:132px;flex:none;border:1px solid var(--line);border-radius:3px}
+.result-img .meta{min-width:0;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.meta .mono{font-family:var(--f-mono);font-size:12px;color:var(--ink)}
+.toast{font-size:13.5px;color:var(--muted);min-height:1.2em}
+.err{color:var(--fail);font-size:13.5px}
+.status{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)} .dot.on{background:var(--pass)} .dot.off{background:var(--warn)}
+footer{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+footer a{color:var(--gold)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Passport Photo Booth</h1>
+    <div class="spec">2 × 2 in · 600 px<br>U.S. Dept. of State</div>
+  </header>
+
+  <!-- START -->
+  <section id="sStart" class="wrap" style="gap:16px">
+    <div class="frame" id="startFrame"><canvas id="sampleCv" width="600" height="600"></canvas></div>
+    <div class="btns">
+      <button class="primary grow" id="btnCamera" type="button">Take Photo</button>
+      <label class="filebtn grow">Upload Photo<input id="fileIn" type="file" accept="image/*"></label>
+    </div>
+    <p class="err" id="startErr" hidden></p>
+    <div class="card">
+      <h2>What Gets Checked</h2>
+      <div class="rules">
+        <div><b>HEAD</b><span>1 to 1⅜ in, chin to crown (50–69% of photo)</span></div>
+        <div><b>EYES</b><span>Eye line 56–69% up from the bottom</span></div>
+        <div><b>BACKDROP</b><span>Plain white or off-white, no shadows</span></div>
+        <div><b>POSE</b><span>Facing camera, centered, head level</span></div>
+        <div><b>FACE</b><span>Eyes open, mouth closed, no glasses</span></div>
+        <div><b>FILE</b><span>Color JPEG, 600–1200 px square</span></div>
+      </div>
+      <p class="muted">Tips: stand about 2 feet from a white wall, face a window for even light, and have someone else take it if you can. Wear a dark top.</p>
+    </div>
+    <div class="status"><span class="dot" id="detDot"></span><span id="detText">Loading face detection…</span></div>
+  </section>
+
+  <!-- CAMERA -->
+  <section id="sCamera" class="wrap" style="gap:14px" hidden>
+    <div class="frame" id="camFrame">
+      <video id="video" playsinline muted autoplay></video>
+      <svg class="guide" viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <div class="hint" id="camHint">Line your head up with the outline</div>
+      <div class="count" id="countdown" hidden></div>
+    </div>
+    <div class="btns">
+      <button class="primary grow" id="btnShutter" type="button">Capture</button>
+      <button class="grow" id="btnTimer" type="button">3 s Timer</button>
+      <button id="btnFlip" type="button">Flip</button>
+      <button id="btnCamBack" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <!-- ADJUST -->
+  <section id="sAdjust" class="wrap" style="gap:14px" hidden>
+    <div>
+      <h2>Fit to the Outline</h2>
+      <p class="muted">Drag to move, pinch or use the sliders to resize. Top of head on the upper gold tick, chin on the lower tick, eyes inside the band.</p>
+    </div>
+    <div class="frame" id="adjFrame">
+      <canvas id="adjCv"></canvas>
+      <svg class="guide" viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <div class="hint" id="adjHint" hidden></div>
+    </div>
+    <div class="card" style="gap:10px">
+      <div class="slider"><span>Size</span><input id="zoom" type="range" min="-1" max="1" step="0.001" value="0"><output id="zoomOut">100%</output></div>
+      <div class="slider"><span>Tilt</span><input id="rot" type="range" min="-15" max="15" step="0.1" value="0"><output id="rotOut">0.0°</output></div>
+    </div>
+    <div class="btns">
+      <button class="gold grow" id="btnAuto" type="button" disabled>Auto-Fit Face</button>
+      <button class="primary grow" id="btnCheck" type="button">Check Photo</button>
+      <button id="btnRetake" type="button">Start Over</button>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="sResult" class="wrap" style="gap:14px" hidden>
+    <div class="summary" id="summary"><div class="stamp" id="stamp">—</div><div class="txt"><strong id="sumTitle"></strong><span class="muted" id="sumText"></span></div></div>
+    <div class="result-img">
+      <canvas id="outCv" width="600" height="600"></canvas>
+      <div class="meta">
+        <span class="mono">600 × 600 px · JPEG</span>
+        <span>Prints at exactly 2 × 2 in at 300 dpi.</span>
+        <span id="srcRes" class="mono"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Automatic Checks</h2>
+      <ul class="checks" id="checkList"></ul>
+      <button class="gold" id="btnAI" type="button" hidden>Ask Claude to Review Face &amp; Lighting</button>
+      <p class="toast" id="aiStatus"></p>
+    </div>
+    <div class="card">
+      <h2>Confirm These Yourself</h2>
+      <div id="confirms"></div>
+    </div>
+    <div class="card">
+      <h2>Save for Free</h2>
+      <div class="btns">
+        <button class="primary grow" id="dl600" type="button">Digital 600 px</button>
+        <button class="grow" id="dl1200" type="button">Digital 1200 px</button>
+        <button class="grow" id="dlSheet" type="button">4 × 6 Print Sheet</button>
+      </div>
+      <p class="muted">The print sheet holds two 2 × 2 photos with cut marks. Order it as a regular 4 × 6 print (about $0.40 at most drugstores) and choose matte or glossy, no borders, no "fit to page."</p>
+      <p class="toast" id="dlStatus"></p>
+    </div>
+    <div class="btns">
+      <button class="grow" id="btnBackAdj" type="button">Adjust Again</button>
+      <button class="grow" id="btnNew" type="button">New Photo</button>
+    </div>
+  </section>
+
+  <footer>Checks follow the U.S. Department of State photo rules at <a href="https://travel.state.gov/content/travel/en/passports/how-apply/photos.html" target="_blank" rel="noopener">travel.state.gov</a>. The agency makes the final call on every photo. Photos never leave your device unless you choose the Claude review.</footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+// ---------- Spec (fractions of the square frame, measured from top) ----------
+const SPEC = { headMin:.50, headMax:.69, eyeMinFromBottom:.56, eyeMaxFromBottom:.69,
+  guideCrown:.10, guideChin:.70, guideCx:.5 };
+const MP_VER = "0.10.14";
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+const $ = id => document.getElementById(id);
+const screens = ["sStart","sCamera","sAdjust","sResult"];
+function show(id){ screens.forEach(s => $(s).hidden = s !== id); window.scrollTo({top:0}); }
+
+// ---------- Guide overlay ----------
+function guideSVG(){
+  const crown = SPEC.guideCrown*100, chin = SPEC.guideChin*100, cy=(crown+chin)/2, ry=(chin-crown)/2, rx=ry*.72;
+  const hMin = SPEC.headMin*100, hMax = SPEC.headMax*100;
+  const eyeTop = (1-SPEC.eyeMaxFromBottom)*100, eyeBot=(1-SPEC.eyeMinFromBottom)*100;
+  const shoulders = `M ${50-ry*.33} ${chin-3} Q ${50-ry*.33} ${chin+5} ${50-ry*.55} ${chin+8} Q 12 ${chin+13} 6 100 L 94 100 Q 88 ${chin+13} ${50+ry*.55} ${chin+8} Q ${50+ry*.33} ${chin+5} ${50+ry*.33} ${chin-3}`;
+  return `
+  <defs><mask id="M"><rect width="100" height="100" fill="#fff"/>
+    <ellipse cx="50" cy="${cy}" rx="${rx}" ry="${ry}" fill="#000"/><path d="${shoulders} Z" fill="#000"/></mask></defs>
+  <rect width="100" height="100" fill="rgba(10,16,30,.38)" mask="url(#M)"/>
+  <rect x="0" y="${eyeTop}" width="100" height="${eyeBot-eyeTop}" fill="rgba(245,210,122,.12)"/>
+  <line x1="0" x2="100" y1="${eyeTop}" y2="${eyeTop}" stroke="var(--guide)" stroke-width=".3" stroke-dasharray="1.2 1.2"/>
+  <line x1="0" x2="100" y1="${eyeBot}" y2="${eyeBot}" stroke="var(--guide)" stroke-width=".3" stroke-dasharray="1.2 1.2"/>
+  <text x="2" y="${eyeTop-1}" font-size="2.6" fill="var(--guide)" font-family="IBM Plex Mono,monospace">EYES</text>
+  <ellipse class="g-head" cx="50" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="#fff" stroke-width=".6" stroke-dasharray="2 1.4"/>
+  <path class="g-head" d="${shoulders}" fill="none" stroke="#fff" stroke-width=".6" stroke-dasharray="2 1.4"/>
+  <line x1="${50-6}" x2="${50+6}" y1="${crown}" y2="${crown}" stroke="var(--guide)" stroke-width=".9"/>
+  <line x1="${50-6}" x2="${50+6}" y1="${chin}" y2="${chin}" stroke="var(--guide)" stroke-width=".9"/>
+  <text x="${50+7.5}" y="${crown+1}" font-size="2.6" fill="var(--guide)" font-family="IBM Plex Mono,monospace">CROWN</text>
+  <text x="${50+7.5}" y="${chin+1}" font-size="2.6" fill="var(--guide)" font-family="IBM Plex Mono,monospace">CHIN</text>
+  <line x1="92" x2="92" y1="${chin-hMax}" y2="${chin-hMin}" stroke="var(--guide)" stroke-width=".9"/>
+  <text x="91" y="${chin-hMax-1.2}" font-size="2.3" text-anchor="end" fill="var(--guide)" font-family="IBM Plex Mono,monospace">crown range</text>`;
+}
+document.querySelectorAll("svg.guide").forEach(s => s.innerHTML = guideSVG());
+function setGuideState(svg, good){ svg.querySelectorAll(".g-head").forEach(e => e.setAttribute("stroke", good ? "#5BE39A" : "#fff")); }
+
+// Sample illustration on the start screen
+(function drawSample(){
+  const c=$("sampleCv"), x=c.getContext("2d"), S=600;
+  const g=x.createLinearGradient(0,0,0,S); g.addColorStop(0,"#F7F7F5"); g.addColorStop(1,"#E9EAE7"); x.fillStyle=g; x.fillRect(0,0,S,S);
+  x.fillStyle="#2B3550"; x.beginPath(); x.moveTo(60,S); x.quadraticCurveTo(110,470,230,455); x.lineTo(370,455); x.quadraticCurveTo(490,470,540,S); x.fill();
+  x.fillStyle="#C9A285"; x.fillRect(255,390,90,80);
+  x.beginPath(); x.ellipse(300,250,112,160,0,0,Math.PI*2); x.fillStyle="#D7B496"; x.fill();
+  x.beginPath(); x.ellipse(300,165,122,92,0,Math.PI,0); x.fillStyle="#4A3326"; x.fill();
+  x.fillStyle="#2A1E18"; [258,342].forEach(ex=>{x.beginPath();x.ellipse(ex,235,11,7,0,0,Math.PI*2);x.fill();});
+  x.strokeStyle="#8C5E4A"; x.lineWidth=5; x.beginPath(); x.moveTo(275,330); x.lineTo(325,330); x.stroke();
+  const ov=document.createElementNS("http://www.w3.org/2000/svg","svg"); ov.setAttribute("viewBox","0 0 100 100"); ov.setAttribute("class","guide"); ov.innerHTML=guideSVG(); $("startFrame").appendChild(ov);
+  const h=document.createElement("div"); h.className="hint"; h.textContent="Example framing"; $("startFrame").appendChild(h);
+})();
+
+// ---------- Face detection (MediaPipe, optional) ----------
+let landmarker = null;
+const det = { ready:false, failed:false };
+function setDet(state, text){ $("detDot").className = "dot " + state; $("detText").textContent = text; }
+(async function loadDetector(){
+  const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),20000));
+  try{
+    const work = (async()=>{
+      const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`);
+      const fs = await vision.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+      const make = delegate => vision.FaceLandmarker.createFromOptions(fs,{ baseOptions:{modelAssetPath:MODEL_URL, delegate},
+        runningMode:"IMAGE", numFaces:2, outputFaceBlendshapes:true });
+      try { return await make("GPU"); } catch { return await make("CPU"); }
+    })();
+    landmarker = await Promise.race([work, timeout]);
+    det.ready = true; setDet("on","Face detection on: automatic head size, eye line and expression checks");
+  }catch(e){
+    det.failed = true;
+    setDet("off","Face detection unavailable here. Use the outline to size your head; lighting and background are still checked.");
+  }
+  if (state.img) $("btnAuto").disabled = !det.ready;
+})();
+
+function detect(source){
+  if(!landmarker) return null;
+  try{ return landmarker.detect(source); }catch{ return null; }
+}
+// Landmark helpers (indices from MediaPipe face mesh)
+function faceGeom(lm, w, h){
+  const P = i => ({x:lm[i].x*w, y:lm[i].y*h});
+  const top=P(10), chin=P(152), le=P(33), re=P(263), nose=P(1);
+  const up = {x:top.x-chin.x, y:top.y-chin.y};
+  const crown = {x:chin.x+up.x*1.24, y:chin.y+up.y*1.24}; // forehead mark sits ~80% of the way to the crown
+  const eyes = {x:(le.x+re.x)/2, y:(le.y+re.y)/2};
+  return {crown, chin, eyes, le, re, nose};
+}
+
+// ---------- Camera ----------
+let stream = null, facing = "user", camLoop = 0, lastDet = 0;
+async function openCamera(){
+  $("startErr").hidden = true;
+  if(!navigator.mediaDevices?.getUserMedia){ return nativeCamera(); }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing, width:{ideal:1920}, height:{ideal:1920}}, audio:false});
+  }catch(e){ return nativeCamera(); }
+  const v=$("video"); v.srcObject=stream; v.style.transform = facing==="user" ? "scaleX(-1)" : "none";
+  await v.play().catch(()=>{});
+  show("sCamera"); camLoop = requestAnimationFrame(camTick);
+}
+function nativeCamera(){
+  // Live preview is blocked in this view; fall back to the phone's own camera, then align in the next step.
+  const i=$("fileIn"); i.setAttribute("capture","user"); i.click();
+  setTimeout(()=>i.removeAttribute("capture"),1000);
+}
+function stopCamera(){ cancelAnimationFrame(camLoop); if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
+function camTick(t){
+  camLoop = requestAnimationFrame(camTick);
+  const v=$("video"); if(!det.ready || v.readyState<2 || t-lastDet<180) return; lastDet=t;
+  const r = detect(v); const hint=$("camHint"), svg=$("camFrame").querySelector("svg");
+  if(!r){ return; }
+  const n = r.faceLandmarks?.length||0;
+  if(n===0){ hint.textContent="No face found. Look straight at the camera"; hint.className="hint"; setGuideState(svg,false); return; }
+  if(n>1){ hint.textContent="Only one person in the frame"; hint.className="hint"; setGuideState(svg,false); return; }
+  const vw=v.videoWidth, vh=v.videoHeight, m=Math.min(vw,vh), ox=(vw-m)/2, oy=(vh-m)/2;
+  const g = faceGeom(r.faceLandmarks[0], vw, vh);
+  const F = p => ({x:(p.x-ox)/m, y:(p.y-oy)/m});
+  const crown=F(g.crown), chin=F(g.chin), eyes=F(g.eyes), le=F(g.le), re=F(g.re);
+  const head = chin.y-crown.y, eyeB = 1-eyes.y, tilt = Math.atan2(re.y-le.y, re.x-le.x)*180/Math.PI;
+  let msg="", ok=false;
+  if(head < SPEC.headMin+.02) msg="Move closer";
+  else if(head > SPEC.headMax-.02) msg="Back up a little";
+  else if(Math.abs(eyes.x-.5) > .05) msg="Center your face in the outline";
+  else if(eyeB < SPEC.eyeMinFromBottom) msg="Raise the camera slightly";
+  else if(eyeB > SPEC.eyeMaxFromBottom) msg="Lower the camera slightly";
+  else if(Math.abs(tilt) > 4) msg="Level your head";
+  else { msg="Looks good. Hold still"; ok=true; }
+  hint.textContent=msg; hint.className = ok ? "hint ok" : "hint"; setGuideState(svg, ok);
+}
+function capture(){
+  const v=$("video"); if(!v.videoWidth) return;
+  const c=document.createElement("canvas"); c.width=v.videoWidth; c.height=v.videoHeight;
+  const x=c.getContext("2d");
+  if(facing==="user"){ x.translate(c.width,0); x.scale(-1,1); } // keep what the person saw on screen
+  x.drawImage(v,0,0); stopCamera();
+  loadImage(c, true);
+}
+let timerId=0;
+function timerCapture(){
+  clearInterval(timerId); let n=3; const el=$("countdown"); el.hidden=false; el.textContent=n;
+  timerId=setInterval(()=>{ n--; if(n<=0){ clearInterval(timerId); el.hidden=true; capture(); } else el.textContent=n; },1000);
+}
+
+// ---------- Image state & adjust ----------
+const state = { img:null, w:0, h:0, sc:1, tx:.5, ty:.5, rot:0, baseSc:1, face:null, faces:0, blend:null };
+async function loadImage(src, fromCamera){
+  let img = src;
+  if(src instanceof Blob){
+    try{ img = await createImageBitmap(src, {imageOrientation:"from-image"}); }
+    catch{ img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(src); }); }
+  }
+  state.img=img; state.w=img.width; state.h=img.height;
+  state.baseSc = 1/Math.min(state.w,state.h); state.sc=state.baseSc; state.tx=.5; state.ty=.5; state.rot=0;
+  $("zoom").value=0; $("rot").value=0;
+  // detect on the original image once
+  state.face=null; state.faces=0; state.blend=null;
+  if(det.ready){
+    const r = detect(img);
+    if(r){ state.faces=r.faceLandmarks?.length||0;
+      if(state.faces){ state.face=faceGeom(r.faceLandmarks[0], state.w, state.h);
+        const b={}; (r.faceBlendshapes?.[0]?.categories||[]).forEach(c=>b[c.categoryName]=c.score); state.blend=b; } }
+  }
+  $("btnAuto").disabled = !state.face;
+  show("sAdjust"); sizeCanvas();
+  if(state.face && !fromCamera) autoFit(); else draw();
+  updateAdjHint();
+}
+function sizeCanvas(){
+  const c=$("adjCv"), r=c.getBoundingClientRect(), d=window.devicePixelRatio||1;
+  c.width=Math.round(r.width*d); c.height=Math.round(r.width*d);
+}
+function render(ctx, S){
+  ctx.save(); ctx.fillStyle="#fff"; ctx.fillRect(0,0,S,S);
+  ctx.imageSmoothingQuality="high";
+  ctx.translate(state.tx*S, state.ty*S); ctx.rotate(state.rot); ctx.scale(state.sc*S, state.sc*S);
+  ctx.drawImage(state.img, -state.w/2, -state.h/2); ctx.restore();
+}
+function draw(){ const c=$("adjCv"); render(c.getContext("2d"), c.width); updateAdjHint(); syncSliders(); }
+function syncSliders(){
+  const z=Math.log2(state.sc/state.baseSc)/2; $("zoom").value=Math.max(-1,Math.min(1,z));
+  $("zoomOut").textContent=Math.round(state.sc/state.baseSc*100)+"%";
+  const deg=state.rot*180/Math.PI; $("rot").value=deg; $("rotOut").textContent=deg.toFixed(1)+"°";
+}
+// map image px -> frame fraction
+function toFrame(p){
+  const dx=p.x-state.w/2, dy=p.y-state.h/2, c=Math.cos(state.rot), s=Math.sin(state.rot);
+  return { x: state.tx + (dx*c - dy*s)*state.sc, y: state.ty + (dx*s + dy*c)*state.sc };
+}
+function frameGeom(){
+  if(!state.face) return null; const f=state.face;
+  const crown=toFrame(f.crown), chin=toFrame(f.chin), eyes=toFrame(f.eyes), le=toFrame(f.le), re=toFrame(f.re), nose=toFrame(f.nose);
+  return { head: chin.y-crown.y, eyeB: 1-eyes.y, cx:(eyes.x+nose.x)/2, tilt: Math.atan2(re.y-le.y, re.x-le.x)*180/Math.PI, crown, chin };
+}
+function autoFit(){
+  const f=state.face; if(!f) return;
+  const ang=Math.atan2(f.re.y-f.le.y, f.re.x-f.le.x); state.rot=-ang;
+  const headPx=Math.hypot(f.chin.x-f.crown.x, f.chin.y-f.crown.y);
+  state.sc = .60/headPx;
+  const hc={x:(f.crown.x+f.chin.x)/2, y:(f.crown.y+f.chin.y)/2};
+  const dx=hc.x-state.w/2, dy=hc.y-state.h/2, c=Math.cos(state.rot), s=Math.sin(state.rot);
+  state.tx = .5 - (dx*c-dy*s)*state.sc; state.ty = .40 - (dx*s+dy*c)*state.sc;
+  draw();
+}
+function updateAdjHint(){
+  const h=$("adjHint"), svg=$("adjFrame").querySelector("svg"), g=frameGeom();
+  if(!g){ h.hidden=true; setGuideState(svg,false); return; }
+  h.hidden=false;
+  const ok = g.head>=SPEC.headMin && g.head<=SPEC.headMax && g.eyeB>=SPEC.eyeMinFromBottom && g.eyeB<=SPEC.eyeMaxFromBottom && Math.abs(g.cx-.5)<.05 && Math.abs(g.tilt)<3;
+  h.textContent = ok ? "Fits the template" : `Head ${Math.round(g.head*100)}% · eyes ${Math.round(g.eyeB*100)}% up`;
+  h.className = ok ? "hint ok" : "hint"; setGuideState(svg, ok);
+}
+// Gestures: drag + pinch
+const ptrs=new Map(); let gesture=null;
+const af=$("adjFrame");
+af.addEventListener("pointerdown",e=>{ af.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); startGesture(); });
+af.addEventListener("pointermove",e=>{ if(!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); moveGesture(); });
+["pointerup","pointercancel"].forEach(t=>af.addEventListener(t,e=>{ ptrs.delete(e.pointerId); startGesture(); }));
+af.addEventListener("wheel",e=>{ e.preventDefault(); zoomAround(Math.exp(-e.deltaY*.0015)); },{passive:false});
+function pts(){ return [...ptrs.values()]; }
+function startGesture(){
+  const p=pts(), W=af.getBoundingClientRect().width;
+  if(!p.length){ gesture=null; return; }
+  gesture={ W, p0:p.map(q=>({...q})), tx:state.tx, ty:state.ty, sc:state.sc, d0: p.length>1 ? Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y) : 0 };
+}
+function moveGesture(){
+  if(!gesture) return; const p=pts(), W=gesture.W;
+  const mid = a => a.length>1 ? {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2} : a[0];
+  const m0=mid(gesture.p0), m1=mid(p);
+  let sc=gesture.sc, tx=gesture.tx+(m1.x-m0.x)/W, ty=gesture.ty+(m1.y-m0.y)/W;
+  if(p.length>1 && gesture.d0>0){
+    const k=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/gesture.d0; sc=gesture.sc*k;
+    const r=af.getBoundingClientRect(), cx=(m1.x-r.left)/W, cy=(m1.y-r.top)/W;
+    tx = cx + (tx-cx)*k; ty = cy + (ty-cy)*k;
+  }
+  state.sc=sc; state.tx=tx; state.ty=ty; draw();
+}
+function zoomAround(k, cx=.5, cy=.40){ state.tx=cx+(state.tx-cx)*k; state.ty=cy+(state.ty-cy)*k; state.sc*=k; draw(); }
+$("zoom").addEventListener("input",e=>{ const target=state.baseSc*Math.pow(4,+e.target.value); zoomAround(target/state.sc); });
+$("rot").addEventListener("input",e=>{ state.rot=(+e.target.value)*Math.PI/180; draw(); });
+window.addEventListener("resize",()=>{ if(!$("sAdjust").hidden){ sizeCanvas(); draw(); } });
+
+// ---------- Checks ----------
+function lum(r,g,b){ return .2126*r+.7152*g+.0722*b; }
+function regionStats(data, S, rects, test){
+  let n=0, sL=0, sL2=0, sSat=0;
+  for(const [x0,y0,x1,y1] of rects){
+    for(let y=Math.floor(y0*S); y<Math.floor(y1*S); y+=2) for(let x=Math.floor(x0*S); x<Math.floor(x1*S); x+=2){
+      if(test && !test(x/S,y/S)) continue;
+      const i=(y*S+x)*4, r=data[i], g=data[i+1], b=data[i+2], L=lum(r,g,b);
+      n++; sL+=L; sL2+=L*L; sSat+=Math.max(r,g,b)-Math.min(r,g,b);
+    }
+  }
+  const mean=sL/n; return { n, mean, sd:Math.sqrt(Math.max(0,sL2/n-mean*mean)), sat:sSat/n };
+}
+function sharpness(data,S,x0,y0,x1,y1){
+  const gray=(x,y)=>{ const i=(y*S+x)*4; return lum(data[i],data[i+1],data[i+2]); };
+  let n=0,s=0,s2=0;
+  for(let y=Math.floor(y0*S)+1;y<Math.floor(y1*S)-1;y+=2) for(let x=Math.floor(x0*S)+1;x<Math.floor(x1*S)-1;x+=2){
+    const l=4*gray(x,y)-gray(x-1,y)-gray(x+1,y)-gray(x,y-1)-gray(x,y+1); n++; s+=l; s2+=l*l; }
+  const m=s/n; return s2/n-m*m;
+}
+let checks=[];
+function runChecks(){
+  const c=$("outCv"), S=600, x=c.getContext("2d"); render(x,S);
+  const data=x.getImageData(0,0,S,S).data;
+  const out=[]; const add=(status,name,detail)=>out.push({status,name,detail});
+  const g=frameGeom();
+
+  // Coverage: frame fully filled by image?
+  const corners=[[0,0],[1,0],[0,1],[1,1]].map(([fx,fy])=>{ // inverse map frame->image
+    const dx=(fx-state.tx)/state.sc, dy=(fy-state.ty)/state.sc, cs=Math.cos(-state.rot), sn=Math.sin(-state.rot);
+    return { x: dx*cs-dy*sn+state.w/2, y: dx*sn+dy*cs+state.h/2 }; });
+  const covered = corners.every(p=>p.x>=-1&&p.y>=-1&&p.x<=state.w+1&&p.y<=state.h+1);
+  if(!covered) add("fail","Photo fills the frame","White gaps at the edges. Zoom in or move the photo so it covers the whole square.");
+
+  // Faces
+  if(det.ready){
+    if(state.faces===0) add("fail","One face visible","No face was detected. Use a clear, front-facing photo.");
+    else if(state.faces>1) add("fail","One face visible",`${state.faces} faces detected. Only you can be in the photo.`);
+  }
+
+  // Head size & eye line
+  if(g){
+    const hp=g.head*100, inch=g.head*2;
+    add(g.head>=SPEC.headMin&&g.head<=SPEC.headMax?"pass":"fail","Head size",
+      `<span class="num">${hp.toFixed(0)}%</span> of height ≈ <span class="num">${inch.toFixed(2)} in</span> chin to crown. Needs 1.00–1.38 in. Crown is estimated from your forehead, so check hair height by eye.`);
+    const eb=g.eyeB*100;
+    add(g.eyeB>=SPEC.eyeMinFromBottom&&g.eyeB<=SPEC.eyeMaxFromBottom?"pass":"fail","Eye height",
+      `Eyes <span class="num">${eb.toFixed(0)}%</span> up from the bottom. Needs 56–69%.`);
+    const off=Math.abs(g.cx-.5);
+    add(off<.04?"pass":off<.07?"warn":"fail","Centered",`Face is <span class="num">${(off*100).toFixed(1)}%</span> off center.`);
+    const t=Math.abs(g.tilt);
+    add(t<3?"pass":t<6?"warn":"fail","Head level",`Tilted <span class="num">${t.toFixed(1)}°</span>. Keep under 3°.`);
+  } else {
+    add("info","Head size and eye line","Checked by you: top of head on the upper gold tick, chin on the lower tick, eyes in the shaded band.");
+  }
+
+  // Expression (blendshapes)
+  const b=state.blend;
+  if(b){
+    const blink=Math.max(b.eyeBlinkLeft||0,b.eyeBlinkRight||0);
+    add(blink<.45?"pass":"fail","Both eyes open", blink<.45?"Eyes look open.":"One or both eyes look closed or squinting.");
+    const jaw=b.jawOpen||0, smile=((b.mouthSmileLeft||0)+(b.mouthSmileRight||0))/2;
+    add(jaw<.12&&smile<.55?"pass":jaw<.25?"warn":"fail","Neutral expression",
+      jaw>=.12?"Mouth looks open. Close your mouth.":smile>=.55?"Big smile detected. A neutral face or slight natural smile is safest.":"Neutral or natural expression.");
+  }
+
+  // Background
+  const bg=regionStats(data,S,[[0,0,1,.07],[0,.07,.12,.6],[.88,.07,1,.6]]);
+  const bgStatus = bg.mean>=205&&bg.sat<22&&bg.sd<16 ? "pass" : (bg.mean>=175&&bg.sat<35&&bg.sd<26 ? "warn":"fail");
+  const bgWhy = [];
+  if(bg.mean<205) bgWhy.push(bg.mean<175?"too dark or gray":"a bit gray");
+  if(bg.sat>=22) bgWhy.push("has a color tint");
+  if(bg.sd>=16) bgWhy.push("uneven, patterned or shadowed");
+  add(bgStatus,"White background", bgStatus==="pass" ? `Plain and light (brightness <span class="num">${Math.round(bg.mean)}</span>/255).`
+    : `Background is ${bgWhy.join(", ")} (brightness <span class="num">${Math.round(bg.mean)}</span>/255). Use a plain white wall with light on it.`);
+
+  // Face lighting
+  let fx0=.36,fx1=.64,fy0=.22,fy1=.62;
+  if(g){ const cx=g.cx, h=g.head; fx0=cx-h*.26; fx1=cx+h*.26; fy0=g.crown.y+h*.30; fy1=g.chin.y-h*.12; }
+  const L=regionStats(data,S,[[fx0,fy0,(fx0+fx1)/2,fy1]]), R=regionStats(data,S,[[(fx0+fx1)/2,fy0,fx1,fy1]]);
+  const fm=(L.mean+R.mean)/2, diff=Math.abs(L.mean-R.mean);
+  add(fm>=85&&fm<=215?"pass":"fail","Face exposure", fm<85?"Face is too dark. Add light in front of you.":fm>215?"Face is washed out. Move away from direct light.":`Brightness <span class="num">${Math.round(fm)}</span>/255.`);
+  add(diff<22?"pass":diff<38?"warn":"fail","Even lighting", diff<22?"No strong side shadow.":`One side of the face is <span class="num">${Math.round(diff)}</span> levels darker. Face a window or add a light on the dark side.`);
+
+  // Color
+  const fc=regionStats(data,S,[[fx0,fy0,fx1,fy1]]);
+  add(fc.sat>6?"pass":"fail","Color photo", fc.sat>6?"Full color.":"Looks black and white. Passport photos must be in color.");
+
+  // Sharpness & resolution
+  const sh=sharpness(data,S,fx0,fy0,fx1,fy1);
+  add(sh>18?"pass":sh>8?"warn":"fail","In focus", sh>18?"Sharp enough.":"Looks soft or blurry. Hold still, tap to focus, use more light.");
+  const srcSide=1/state.sc;
+  $("srcRes").textContent=`Source crop ${Math.round(srcSide)} px`;
+  add(srcSide>=600?"pass":srcSide>=420?"warn":"fail","Resolution", srcSide>=600?`Crop uses <span class="num">${Math.round(srcSide)} px</span> of the original. No upscaling.`
+    :`Crop uses only <span class="num">${Math.round(srcSide)} px</span>, so it was enlarged. Stand closer or use the back camera.`);
+
+  checks=out; renderChecks();
+}
+const CONFIRMS=[
+  "No glasses (unless you have a signed medical statement)",
+  "No hat, headphones or head covering (religious or medical coverings allowed with a statement)",
+  "Hair is not covering your eyes or face",
+  "Taken within the last 6 months and looks like you today",
+  "No filters, beauty mode or editing",
+  "Not wearing a uniform or camouflage"
+];
+$("confirms").innerHTML = CONFIRMS.map((t,i)=>`<label class="confirm"><input type="checkbox" id="cf${i}"><span>${t}</span></label>`).join("");
+$("confirms").addEventListener("change",renderSummary);
+let aiChecks=[];
+function renderChecks(){
+  const all=[...checks,...aiChecks];
+  const lab={pass:"Pass",warn:"Check",fail:"Fail",info:"You"};
+  $("checkList").innerHTML = all.map(c=>`<li><span class="pill ${c.status}">${lab[c.status]}</span><div><div class="ck-name">${c.name}</div><div class="ck-detail">${c.detail}</div></div></li>`).join("");
+  renderSummary();
+}
+function renderSummary(){
+  const all=[...checks,...aiChecks], fails=all.filter(c=>c.status==="fail").length, warns=all.filter(c=>c.status==="warn").length;
+  const unconfirmed=CONFIRMS.filter((_,i)=>!$("cf"+i).checked).length;
+  const el=$("summary"), st=$("stamp");
+  if(fails){ el.className="summary fail"; st.textContent="RETAKE"; $("sumTitle").textContent=`${fails} issue${fails>1?"s":""} to fix`; $("sumText").textContent="This photo would likely be rejected. See the failed checks below."; }
+  else if(warns||unconfirmed){ el.className="summary warn"; st.textContent="REVIEW"; $("sumTitle").textContent="Almost there";
+    $("sumText").textContent=[warns?`${warns} item${warns>1?"s":""} worth a second look`:"", unconfirmed?`${unconfirmed} item${unconfirmed>1?"s":""} to confirm yourself`:""].filter(Boolean).join(" · "); }
+  else { el.className="summary pass"; st.innerHTML="MEETS<br>SPEC"; $("sumTitle").textContent="Meets the standards we can check"; $("sumText").textContent="Save it below."; }
+}
+
+// ---------- Claude review (only inside Claude) ----------
+let sampleNS=null, downloadsNS=null;
+(async()=>{
+  if(!window.claude?.use) return;
+  try{ downloadsNS = await window.claude.use("downloads"); }catch{}
+  try{ sampleNS = await window.claude.use("sample");
+    const lim = sampleNS ? await sampleNS.limits().catch(()=>null) : null;
+    if(!lim?.images) sampleNS=null; }catch{ sampleNS=null; }
+  $("btnAI").hidden = !sampleNS;
+})();
+$("btnAI").addEventListener("click", async()=>{
+  const btn=$("btnAI"), st=$("aiStatus"); btn.disabled=true; st.textContent="Claude is reviewing the photo…";
+  try{
+    const blob=await new Promise(r=>$("outCv").toBlob(r,"image/jpeg",.9));
+    const prompt=`The attached image is a cropped 600x600 candidate U.S. passport photo. Judge it against U.S. Department of State photo rules. Return ONLY JSON with these keys, each an object {"ok": true|false|null, "note": "<=14 words"}: "glasses", "head_covering" (hats, headphones, earbuds), "eyes_open", "expression" (neutral or slight natural smile, mouth closed), "facing_camera", "face_shadows", "background_shadows", "glare_or_reflection", "hair_over_face", "clothing" (not white-on-white, no uniform or camouflage), "selfie_distortion" (arm's-length selfie look). ok=true means compliant. Use null only if you truly cannot tell.`;
+    const res=await sampleNS.json(prompt,{images:[blob], modelTier:"default"});
+    const names={glasses:"No glasses",head_covering:"No hat or headphones",eyes_open:"Eyes open (Claude)",expression:"Expression (Claude)",facing_camera:"Facing the camera",face_shadows:"No shadows on face",background_shadows:"No shadows on background",glare_or_reflection:"No glare or reflections",hair_over_face:"Hair clear of face",clothing:"Clothing",selfie_distortion:"No selfie distortion"};
+    aiChecks=Object.entries(names).map(([k,n])=>{ const v=res?.[k]||{}; const s=v.ok===true?"pass":v.ok===false?"fail":"warn";
+      const d=String(v.note||"").replace(/[<>&]/g,""); return {status:s,name:n,detail:(d||"No note")+" <span class=\"muted\">· Claude review</span>"}; });
+    renderChecks(); st.textContent="Review added to the checks above.";
+  }catch(e){
+    st.textContent = e?.code==="not_granted"||e?.code==="declined" ? "Review was not allowed." : e?.code==="rate_limited" ? "Too many requests. Try again in a minute." : "The review could not run. Your automatic checks still apply.";
+  }finally{ btn.disabled=false; }
+});
+
+// ---------- Saving ----------
+function canvasFor(size){ const c=document.createElement("canvas"); c.width=c.height=size; render(c.getContext("2d"),size); return c; }
+function sheet(){
+  const c=document.createElement("canvas"); c.width=1800; c.height=1200; const x=c.getContext("2d");
+  x.fillStyle="#fff"; x.fillRect(0,0,1800,1200);
+  const p=canvasFor(600), pos=[[225,300],[975,300]];
+  pos.forEach(([px,py])=>{ x.drawImage(p,px,py);
+    x.strokeStyle="#999"; x.lineWidth=2; const L=30;
+    [[px,py],[px+600,py],[px,py+600],[px+600,py+600]].forEach(([cx,cy])=>{
+      x.beginPath(); x.moveTo(cx-(cx===px?L+8:-8),cy); x.lineTo(cx-(cx===px?8:-L-8),cy);
+      x.moveTo(cx,cy-(cy===py?L+8:-8)); x.lineTo(cx,cy-(cy===py?8:-L-8)); x.stroke(); }); });
+  x.fillStyle="#888"; x.font="24px sans-serif"; x.textAlign="center";
+  x.fillText("Print at 4 × 6 in, 100% scale. Each photo is 2 × 2 in. Cut on the marks.",900,1080);
+  return c;
+}
+async function save(canvas, name){
+  const st=$("dlStatus"); st.textContent="Preparing…";
+  const blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",.92));
+  try{
+    if(downloadsNS){ await downloadsNS.save({filename:name, data:blob}); st.textContent=`Saved ${name}.`; return; }
+    const file=new File([blob],name,{type:"image/jpeg"});
+    if(navigator.canShare?.({files:[file]})){ await navigator.share({files:[file]}); st.textContent="Shared. Choose Save Image to keep it in Photos."; return; }
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000); st.textContent=`Downloaded ${name}.`;
+  }catch(e){
+    st.textContent = e?.code==="declined"||e?.name==="AbortError" ? "Save canceled." : "Could not save here. Long-press the preview image to save it instead.";
+  }
+}
+$("dl600").addEventListener("click",()=>save(canvasFor(600),"passport-photo-600.jpg"));
+$("dl1200").addEventListener("click",()=>save(canvasFor(1200),"passport-photo-1200.jpg"));
+$("dlSheet").addEventListener("click",()=>save(sheet(),"passport-photo-4x6-sheet.jpg"));
+
+// ---------- Wiring ----------
+$("btnCamera").addEventListener("click",openCamera);
+$("fileIn").addEventListener("change",e=>{ const f=e.target.files?.[0]; e.target.value=""; if(!f) return;
+  loadImage(f,false).catch(()=>{ $("startErr").textContent="That file could not be opened. Try a JPEG or PNG."; $("startErr").hidden=false; show("sStart"); }); });
+$("btnShutter").addEventListener("click",capture);
+$("btnTimer").addEventListener("click",timerCapture);
+$("btnFlip").addEventListener("click",async()=>{ facing = facing==="user"?"environment":"user"; stopCamera(); await openCamera(); });
+$("btnCamBack").addEventListener("click",()=>{ clearInterval(timerId); $("countdown").hidden=true; stopCamera(); show("sStart"); });
+$("btnAuto").addEventListener("click",autoFit);
+$("btnCheck").addEventListener("click",()=>{ aiChecks=[]; $("aiStatus").textContent=""; show("sResult"); runChecks(); });
+$("btnRetake").addEventListener("click",()=>show("sStart"));
+$("btnBackAdj").addEventListener("click",()=>{ show("sAdjust"); sizeCanvas(); draw(); });
+$("btnNew").addEventListener("click",()=>show("sStart"));
+})();
+</script>
+
+</body></html>
