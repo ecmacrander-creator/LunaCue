@@ -127,6 +127,10 @@ body.dim .shell{background:#000;box-shadow:none}
 body.dim .lcd{background:#000;box-shadow:none}
 body.dim .brand{color:#22381a}
 body.dim .toast{background:#0c1708;color:#5d8a48}
+.dimclock{display:none}
+body.dim .dimclock{display:block;text-align:center;font-family:var(--font-display);color:#3E6B2B;margin-top:10px;font-variant-numeric:tabular-nums}
+body.dim .dimclock b{display:block;font-size:2.2rem;line-height:1;font-weight:700}
+body.dim .dimclock small{display:block;font-size:.72rem;color:#2c4a1f;margin-top:6px;letter-spacing:.04em}
 body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;font-family:var(--font-display);font-size:.7rem;color:#22381a;margin-top:6px}
 @media (prefers-reduced-motion: no-preference){ .act,.btn{transition:background .15s,border-color .15s,color .15s} .act .fill{transition:width .4s} }
 </style>
@@ -146,6 +150,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <div class="toast" id="toast" hidden></div>
     </div>
     <div class="brand" id="brand">BORT</div>
+    <div class="dimclock" id="dimClock" aria-live="off"><b id="dimStretch">0:00</b><small id="dimToday">this stretch · 0m today</small></div>
   </div>
   <p class="status" id="status"></p>
 
@@ -550,6 +555,13 @@ function readColors(){
 function setDim(on){
   if(dimmed === on) return;
   dimmed = on; document.body.classList.toggle('dim', on); readColors();
+  if(on) updateDimClock();
+}
+let lastClock = 0;
+function updateDimClock(){
+  const d = day(); lastClock = Date.now();
+  $('#dimStretch').textContent = fmtClock(d.streakMs);
+  $('#dimToday').textContent = 'this stretch · ' + fmt(d.focusMs) + ' today';
 }
 function anySheetOpen(){ return [...document.querySelectorAll('.sheet')].some(x => !x.hidden); }
 // First tap while dimmed only wakes the screen; it doesn't press whatever is under your finger.
@@ -934,6 +946,7 @@ function frame(){
   if(store.mode === 'playing' && !paused){ A.t += fdt; advance(fdt); }
   if(store.mode === 'playing' && !dimmed && !anySheetOpen() && now - lastTouch > DIM_AFTER && document.visibilityState === 'visible') setDim(true);
   if(store.mode !== 'playing' && dimmed) setDim(false);
+  if(dimmed && now - lastClock >= 1000) updateDimClock();
   if(W > 0 && (dirty || now - lastDraw >= (dimmed ? 250 : 110))){
     lastDraw = now; dirty = false; buf.fill(0);
     if(store.mode !== 'playing' || store.activity == null) A.caption = '';
