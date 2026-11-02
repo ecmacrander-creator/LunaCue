@@ -913,6 +913,43 @@ function suggestCycleParams(){
 
   return {cycleLength: L, anchorDate, confidence: best.R, dataPoints: dayNums.length};
 }
+// Per-symptom timing check on the person's own cycle length and day 1.
+// Pooling every symptom together (as suggestCycleParams does) lets a
+// symptom that's spread across the whole cycle drown out one that clusters,
+// so this looks at each symptom separately. For each symptom with 6+ days,
+// it finds the stretch of the cycle (3 days up to half the cycle, wrapping
+// around) where it's most over-represented compared with chance, and keeps
+// it if 60%+ of that symptom's days land there.
+function computeSymptomClusters(){
+  const L = state.cycleLength;
+  const out = [];
+  allSymptoms().forEach(s => {
+    const dates = [...new Set(state.entries.filter(e => (e.symptoms||[]).includes(s.id)).map(e => e.date))];
+    const n = dates.length;
+    if(n < 6) return;
+    const counts = new Array(L).fill(0);
+    dates.forEach(d => counts[cycleDayFor(d) - 1]++);
+    let best = null;
+    for(let w = 3; w <= Math.floor(L/2); w++){
+      for(let start = 0; start < L; start++){
+        let c = 0;
+        for(let k = 0; k < w; k++) c += counts[(start + k) % L];
+        const share = c / n;
+        const excess = share - w / L;
+        if(share >= 0.6 && (!best || excess > best.excess)) best = {start, w, c, share, excess};
+      }
+    }
+    if(!best || best.excess < 0.2) return;
+    const from = best.start + 1;
+    const to = ((best.start + best.w - 1) % L) + 1;
+    out.push({
+      symptom: s, n, count: best.c, from, to,
+      strength: (best.share >= 0.75 && best.excess >= 0.35) ? 'clear' : 'rough',
+      excess: best.excess
+    });
+  });
+  return out.sort((a,b) => b.excess - a.excess);
+}
 function slugify(str){
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
@@ -2800,10 +2837,23 @@ function renderPatterns(){
       ${state.cycleAnchor ? `<button id="reset-anchor-btn" class="link-btn" style="margin:-10px 0 16px;">Use first entry instead</button>` : ''}
 
       ${(() => {
+        const clusters = computeSymptomClusters();
+        if(!clusters.length) return '';
+        return `
+          <div class="banner nudge" style="margin:-6px 0 12px;">
+            <strong>Timing patterns on your ${cycleLength}-day cycle</strong>
+            <ul style="margin:6px 0 0;padding-left:18px;">
+              ${clusters.map(c => `<li>${escapeHtml(c.symptom.label)}: ${c.count} of ${c.n} times on days ${c.from}–${c.to} <span style="color:var(--ink-soft);">(${c.strength === 'clear' ? 'fairly clear' : 'rough'})</span></li>`).join('')}
+            </ul>
+          </div>
+        `;
+      })()}
+
+      ${(() => {
         const suggestion = suggestCycleParams();
         if(!suggestion || suggestion.needMoreData) return `<p style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 16px;">Log symptom days spanning about 8 weeks and this can suggest a cycle length and day 1 for you, based on when symptoms tend to repeat — useful since birth control doesn't give you a real cycle to anchor on. Keep going.</p>`;
         if(suggestion.confidence < 0.25){
-          return `<p style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 16px;">Checked for a repeating rhythm in your ${suggestion.dataPoints} symptom days, but nothing stands out yet — could mean there isn't a strong cycle, or just needs more data. Keep logging.</p>`;
+          return `<p style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 16px;">No single cycle length fits all ${suggestion.dataPoints} symptom days together yet. Individual symptoms can still have their own timing (see above). Keep logging.</p>`;
         }
         const strength = suggestion.confidence >= 0.45 ? 'a fairly clear' : 'a rough';
         return `
