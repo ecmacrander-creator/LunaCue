@@ -131,6 +131,8 @@ body.dim .toast{background:#0c1708;color:#5d8a48}
 body.dim .dimclock{display:block;text-align:center;font-family:var(--font-display);color:#3E6B2B;margin-top:10px;font-variant-numeric:tabular-nums}
 body.dim .dimclock b{display:block;font-size:2.2rem;line-height:1;font-weight:700}
 body.dim .dimclock small{display:block;font-size:.72rem;color:#2c4a1f;margin-top:6px;letter-spacing:.04em}
+body.dim .dimclock #dimAct{color:#3E6B2B;margin-top:10px}
+body.dim .shell{transition:transform 2s ease}
 body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;font-family:var(--font-display);font-size:.7rem;color:#22381a;margin-top:6px}
 @media (prefers-reduced-motion: no-preference){ .act,.btn{transition:background .15s,border-color .15s,color .15s} .act .fill{transition:width .4s} }
 </style>
@@ -150,7 +152,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <div class="toast" id="toast" hidden></div>
     </div>
     <div class="brand" id="brand">BORT</div>
-    <div class="dimclock" id="dimClock" aria-live="off"><b id="dimStretch">0:00</b><small id="dimToday">this stretch · 0m today</small></div>
+    <div class="dimclock" id="dimClock" aria-live="off"><b id="dimStretch">0:00</b><small id="dimToday">this stretch · 0m today</small><small id="dimAct"></small></div>
   </div>
   <p class="status" id="status"></p>
 
@@ -392,6 +394,9 @@ function tick(now){
         d.done[a] = true; A.partyStart = now; A.partyUntil = now + 3200;
         const left = d.acts.filter(x => !d.done[x]).length;
         showToast(left ? PUP+' finished '+ACTS[a].name+'. Pick the next one.' : 'All three done. '+PUP+' is one happy pup.');
+        // If the screen is dimmed, brighten for a few seconds so you see it, then dim again.
+        if(dimmed){ setDim(false); lastTouch = now - DIM_AFTER + 4000; }
+        try{ if(navigator.vibrate) navigator.vibrate([120, 80, 120]); }catch(e){}
         save();
       }
     }
@@ -555,13 +560,17 @@ function readColors(){
 function setDim(on){
   if(dimmed === on) return;
   dimmed = on; document.body.classList.toggle('dim', on); readColors();
-  if(on) updateDimClock();
+  if(on){ lastShift = Date.now(); updateDimClock(); } else $('.shell').style.transform = '';
 }
-let lastClock = 0;
+let lastClock = 0, lastShift = 0;
 function updateDimClock(){
   const d = day(); lastClock = Date.now();
   $('#dimStretch').textContent = fmtClock(d.streakMs);
   $('#dimToday').textContent = 'this stretch · ' + fmt(d.focusMs) + ' today';
+  const a = currentAct(), left = GOAL - (d.actMs[a] || 0);
+  $('#dimAct').textContent = d.done[a] ? ACTS[a].name + ' done ✓ · tap to pick the next one' : ACTS[a].name + ' done in ' + Math.max(1, Math.ceil(left/MIN)) + ' min';
+  // 2. burn-in protection: nudge the whole screen a few pixels every 90 seconds
+  if(Date.now() - lastShift >= 90000){ lastShift = Date.now(); const r = () => Math.round(Math.random()*12 - 6); $('.shell').style.transform = 'translate('+r()+'px,'+r()+'px)'; }
 }
 function anySheetOpen(){ return [...document.querySelectorAll('.sheet')].some(x => !x.hidden); }
 // First tap while dimmed only wakes the screen; it doesn't press whatever is under your finger.
@@ -673,7 +682,8 @@ function bortFace(o, head){
   const g = mctx;
   g.save(); g.translate(head.x, head.y); g.rotate(head.t);
   if(o.sleep){ g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(2,-2); g.lineTo(10,-2); g.stroke(); }
-  else { g.beginPath(); g.arc(6,-3,4.6,0,Math.PI*2); g.fill(); }
+  // Open eye is stamped as a clean 2x2 pixel dot in bort(); a rasterized circle came out as a blob.
+  const eye = o.sleep ? null : g.getTransform().transformPoint(new DOMPoint(6,-3));
   g.beginPath(); g.ellipse(20,2.5,3.8,3.2,0,0,Math.PI*2); g.fill();
   g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(-8,9); g.lineTo(-1,12.5); g.stroke();
   const wear = !o.noWear && store.pet && store.pet.wear;
@@ -684,6 +694,7 @@ function bortFace(o, head){
   else if(wear === 'crown') poly([-13,-12, -1,-14, 0,-23, -3,-18, -6,-24, -9,-18, -13,-22]);
   else if(wear === 'tophat'){ g.fillRect(-14,-16,15,3); g.fillRect(-11,-30,9,15); }
   g.restore();
+  return eye;
 }
 function bort(cx, foot, o){
   o = o || {};
@@ -695,9 +706,10 @@ function bort(cx, foot, o){
   const inside = i => d[i*4+3] > 110;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(inside(i) && (!inside(i-1) || !inside(i+1) || !inside(i-LW) || !inside(i+LW))) buf[i] = 1; }
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH);
-  bortBase(cx, foot, o); bortFace(o, info.head);
+  bortBase(cx, foot, o); const eye = bortFace(o, info.head);
   d = g.getImageData(0,0,LW,LH).data;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100) buf[i] = 1; }
+  if(eye && !(store.pet && store.pet.wear === 'shades')){ const ex = Math.floor(eye.x - 0.5), ey = Math.floor(eye.y - 0.5); px(ex,ey); px(ex+1,ey); px(ex,ey+1); px(ex+1,ey+1); }
   const m = {x:Math.round(info.mouth.x), y:Math.round(info.mouth.y)};
   if(o.item === 'ball') ball(m.x, m.y);
   else if(o.item === 'disc') hline(m.x-2, m.x+2, m.y);
