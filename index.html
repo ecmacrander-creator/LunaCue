@@ -1260,16 +1260,35 @@ function computeCycleTimingRows(items, field){
 }
 
 // Looks at a candidate date's cycle day and flags any symptom that has
-// already shown up on that same cycle day 2+ times before (excluding the
-// date itself) — surfaces a "this tends to happen around here" hint while
-// logging, instead of making the person go check the Patterns tab.
+// shown up within ±2 cycle days of it in 2+ earlier cycles — surfaces a
+// "this tends to happen around here" hint while logging, instead of making
+// the person go check the Patterns tab. Real symptoms drift a day or two
+// cycle to cycle, so an exact-day match missed most of them. Counting
+// distinct past cycles (and skipping the current one) keeps a run of
+// back-to-back bad days from looking like a pattern.
+const RECURRENCE_WINDOW = 2;
+function cycleIndexFor(dateISO){
+  return Math.floor(daysBetween(getAnchorDate(), dateISO) / state.cycleLength);
+}
 function computeRecurrenceHints(dateISO){
   if(state.entries.length < 3) return [];
+  const L = state.cycleLength;
   const targetDay = cycleDayFor(dateISO);
+  const targetCycle = cycleIndexFor(dateISO);
+  const near = d => {
+    const diff = Math.abs(d - targetDay);
+    return Math.min(diff, L - diff) <= RECURRENCE_WINDOW;
+  };
   return allSymptoms()
     .map(s => {
-      const n = state.entries.filter(e => e.date !== dateISO && (e.symptoms||[]).includes(s.id) && cycleDayFor(e.date) === targetDay).length;
-      return {symptom: s, n};
+      const cycles = new Set();
+      state.entries.forEach(e => {
+        if(!(e.symptoms||[]).includes(s.id)) return;
+        const c = cycleIndexFor(e.date);
+        if(c === targetCycle) return;
+        if(near(cycleDayFor(e.date))) cycles.add(c);
+      });
+      return {symptom: s, n: cycles.size};
     })
     .filter(h => h.n >= 2)
     .sort((a,b) => b.n - a.n);
@@ -2425,7 +2444,7 @@ function renderLog(){
   const recurrenceHints = computeRecurrenceHints(f.date);
   const recurrenceBanner = recurrenceHints.length ? `
     <div class="banner nudge">
-      Day ${cycleDayFor(f.date)} of your cycle — ${recurrenceHints.map(h => `${escapeHtml(h.symptom.label)} (${h.n}x)`).join(', ')} ${recurrenceHints.length > 1 ? 'have' : 'has'} shown up here before.
+      Day ${cycleDayFor(f.date)} of your cycle — ${recurrenceHints.map(h => `${escapeHtml(h.symptom.label)} (${h.n} past cycle${h.n===1?'':'s'})`).join(', ')} ${recurrenceHints.length > 1 ? 'have' : 'has'} shown up around this point before.
     </div>
   ` : '';
 
