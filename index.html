@@ -344,6 +344,17 @@
   .loc-btns{display:flex;flex-wrap:wrap;gap:6px;}
   .loc-btns .sev-btn{text-transform:none;}
   .sleep-hours{width:90px !important;flex:none;text-align:center;}
+  .sleep-compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 10px;}
+  .sleep-compare > div{background:var(--bg-alt);border-radius:10px;padding:10px 12px;}
+  .sleep-big{font-family:'IBM Plex Mono',monospace;font-size:24px;color:var(--plum);line-height:1.1;}
+  .sleep-cap{font-size:11.5px;color:var(--ink-soft);margin-top:3px;line-height:1.35;}
+  .sleep-axis{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink-soft);padding:0 2px;margin:2px 0 2px;}
+  .sleep-axis span:nth-child(2){position:relative;left:0;}
+  .sleep-row{margin:0 0 10px;}
+  .sleep-row-label{font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .sleep-row-meta{font-size:11px;color:var(--ink-soft);}
+  .sleep-flag{font-size:10.5px;background:var(--plum);color:#fff;border-radius:8px;padding:1px 7px;}
+  .sleep-flag.calm{background:var(--sage);}
   .time-input{width:130px !important;flex:none;}
   .no-sym-toggle{margin-bottom:10px;}
   .no-sym-toggle.active{background:var(--sage);border-color:var(--sage);}
@@ -729,6 +740,14 @@ async function pasteSleep(){
   state.form.sleepHours = fmtSleep(hours);
   render();
 }
+// Rates a night from Apple Health data: time asleep plus minutes awake
+// overnight. Poor = under 5h or 45+ min awake. Good = 6.5h+ and 20 min
+// awake or less. Everything else is fair.
+function rateSleepQuality(asleepMins, awakeMins){
+  if(asleepMins < 300 || awakeMins >= 45) return 'poor';
+  if(asleepMins >= 390 && awakeMins <= 20) return 'good';
+  return 'fair';
+}
 function applySleepFromLink(){
   try{
     const params = new URLSearchParams(window.location.search);
@@ -739,8 +758,18 @@ function applySleepFromLink(){
       state.form.date = todayISO();
       state.form.sleepHours = fmtSleep(mins/60);
       state.sleepFromHealth = true;
+      // Quality: the shortcut can pass ?sleepq=good|fair|poor directly, or
+      // ?awakemin=N (minutes awake overnight) and Hem rates it.
+      const q = (params.get('sleepq') || '').toLowerCase();
+      const awake = parseInt(params.get('awakemin'), 10);
+      let quality = SLEEP_QUALITY.includes(q) ? q : '';
+      if(!quality && !isNaN(awake) && awake >= 0) quality = rateSleepQuality(mins, awake);
+      if(quality && !state.form.sleepQuality){
+        state.form.sleepQuality = quality;
+        state.sleepQualityFromHealth = true;
+      }
     }
-    params.delete('sleepmin');
+    params.delete('sleepmin'); params.delete('sleepq'); params.delete('awakemin');
     const q = params.toString();
     window.history.replaceState(null, '', window.location.pathname + (q ? '?' + q : '') + window.location.hash);
   }catch(e){ console.error(e); }
@@ -1219,6 +1248,7 @@ async function saveEntry(){
   const ok = await saveData();
   state.editing = null;
   state.sleepFromHealth = false;
+  state.sleepQualityFromHealth = false;
   state.form = blankForm();
   if(ok){
     // A day with Migraine checked goes straight to the migraine questions.
@@ -2470,7 +2500,7 @@ function renderLog(){
 
   const daysSince = daysSinceLastLog();
   const healthBanner = (state.sleepFromHealth && !state.editing) ? `
-    <div class="banner nudge">Sleep filled in from Apple Health. Check it, then save.</div>
+    <div class="banner nudge">Sleep${state.sleepQualityFromHealth ? ' and quality' : ''} filled in from Apple Health. Check it, then save.</div>
   ` : '';
   const reminderBanner = (!state.editing && daysSince !== null && daysSince >= 2) ? `
     <div class="banner nudge">
@@ -2658,6 +2688,96 @@ function renderHistory(){
     `;
   }
   return html;
+}
+
+// --- Sleep vs symptoms. Each entry's sleepHours is the night before that day.
+// Days with imported sleep but nothing else logged are left out: a blank
+// there means "didn't log", not "no symptoms".
+const SHORT_SLEEP = 6;
+function renderSleepCard(rings){
+  const days = state.entries.filter(e => {
+    const h = Number(e.sleepHours);
+    if(e.sleepHours === undefined || e.sleepHours === null || e.sleepHours === '' || isNaN(h)) return false;
+    const has = (e.symptoms||[]).length > 0;
+    if(e.sleepImported && !has && !isSymptomFree(e)) return false;
+    return true;
+  }).map(e => ({...e, h: Number(e.sleepHours)}));
+
+  const head = `<div class="card"><span class="section-label">Sleep vs symptoms</span>`;
+  if(days.length < 5){
+    return `${head}<p style="font-size:13px;color:var(--ink-soft);margin:0;">Log sleep on at least 5 days (along with symptoms or "No symptoms") and this will compare your sleep to how you felt the next day.</p></div>`;
+  }
+
+  const avg = a => a.length ? a.reduce((s,x)=>s+x,0)/a.length : null;
+  const hasSym = e => (e.symptoms||[]).length > 0;
+  const symDays = days.filter(hasSym), clearDays = days.filter(e => !hasSym(e));
+  const shortN = days.filter(e => e.h < SHORT_SLEEP), longN = days.filter(e => e.h >= SHORT_SLEEP);
+  const pct = (a, f) => a.length ? Math.round(a.filter(f).length / a.length * 100) : null;
+  const allAvg = avg(days.map(e=>e.h));
+
+  // Strip chart axis: 3h–9h (clamped)
+  const lo = 3, hi = 9, W = 320, pad = 6;
+  const xOf = h => pad + (Math.min(hi, Math.max(lo, h)) - lo) / (hi - lo) * (W - pad*2);
+  const strip = (hrs, color) => `
+    <svg viewBox="0 0 ${W} 18" width="100%" style="display:block;">
+      <line x1="${pad}" y1="9" x2="${W-pad}" y2="9" stroke="var(--line)" stroke-width="1"/>
+      <line x1="${xOf(SHORT_SLEEP)}" y1="2" x2="${xOf(SHORT_SLEEP)}" y2="16" stroke="var(--ink-soft)" stroke-width="1" stroke-dasharray="2,2"/>
+      ${hrs.map(h => `<circle cx="${xOf(h).toFixed(1)}" cy="9" r="4" fill="${color}" fill-opacity="0.8" stroke="var(--card)" stroke-width="0.8"/>`).join('')}
+    </svg>`;
+
+  // Per symptom: needs 2+ days with sleep data
+  const rows = rings.map(r => {
+    const hrs = days.filter(e => (e.symptoms||[]).includes(r.id)).map(e => e.h);
+    return {r, hrs, a: avg(hrs), short: hrs.filter(h => h < SHORT_SLEEP).length};
+  }).filter(x => x.hrs.length >= 2).sort((a,b) => a.a - b.a);
+
+  const baseShare = shortN.length / days.length; // share of all nights under 6h
+  const flag = x => {
+    if(x.hrs.length < 3) return '';
+    const share = x.short / x.hrs.length;
+    if(share >= 0.75 && share - baseShare >= 0.3) return `<span class="sleep-flag">mostly after short sleep</span>`;
+    if(share <= 0.25 && baseShare - share >= 0.15) return `<span class="sleep-flag calm">not tied to short sleep</span>`;
+    return '';
+  };
+
+  // Quality comparison (only when enough rated nights)
+  const rated = days.filter(e => SLEEP_QUALITY.includes(e.sleepQuality));
+  const qualRows = SLEEP_QUALITY.map(q => {
+    const d = rated.filter(e => e.sleepQuality === q);
+    return {q, n: d.length, p: pct(d, hasSym)};
+  }).filter(x => x.n > 0);
+
+  const fmtH = h => fmtSleep(Math.round(h*100)/100);
+  const thin = days.length < 30;
+
+  return `${head}
+    <div class="sleep-compare">
+      <div><div class="sleep-big">${pct(shortN, hasSym) ?? '–'}%</div><div class="sleep-cap">symptom days after <strong>under ${SHORT_SLEEP}h</strong> (${shortN.length} nights)</div></div>
+      <div><div class="sleep-big">${pct(longN, hasSym) ?? '–'}%</div><div class="sleep-cap">symptom days after <strong>${SHORT_SLEEP}h or more</strong> (${longN.length} nights)</div></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 14px;">Average sleep before a symptom day: <strong style="color:var(--ink)">${symDays.length ? fmtH(avg(symDays.map(e=>e.h))) : '–'}</strong>. Before a clear day: <strong style="color:var(--ink)">${clearDays.length ? fmtH(avg(clearDays.map(e=>e.h))) : '–'}</strong>.</p>
+
+    ${rows.length ? `
+      <div class="timing-group-label">Sleep the night before, by symptom</div>
+      <div class="sleep-axis"><span>3h</span><span>6h</span><span>9h</span></div>
+      ${rows.map(x => `
+        <div class="sleep-row">
+          <div class="sleep-row-label"><span class="dot" style="background:${x.r.color}"></span>${escapeHtml(x.r.label)} ${flag(x)}</div>
+          ${strip(x.hrs, x.r.color)}
+          <div class="sleep-row-meta">avg ${fmtH(x.a)} · ${x.short} of ${x.hrs.length} after under ${SHORT_SLEEP}h</div>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${qualRows.length && rated.length >= 10 ? `
+      <div class="timing-group-label" style="margin-top:14px;">By sleep quality</div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">
+        ${qualRows.map(x => `<li>${x.q[0].toUpperCase()+x.q.slice(1)} nights: ${x.p}% symptom days (${x.n})</li>`).join('')}
+      </ul>
+    ` : `<p style="font-size:11.5px;color:var(--ink-soft);margin:12px 0 0;">${rated.length} night${rated.length===1?'':'s'} have a quality rating. Once 10+ do, this will compare good, fair and poor nights.</p>`}
+
+    <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;">Based on ${days.length} days with sleep logged (avg ${fmtH(allAvg)}). Dashed line = ${SHORT_SLEEP}h. Days with imported sleep but nothing else logged are left out.${thin ? ' Under 30 days, so treat these as leads, not conclusions.' : ''}</p>
+  </div>`;
 }
 
 function renderPatterns(){
@@ -2910,6 +3030,8 @@ function renderPatterns(){
         </p>
       ` : `<p style="font-size:13px;color:var(--ink-soft);margin:0;">Not enough repeats yet — once something shows up on 2+ different days, it'll appear here so you can compare timing across months.</p>`}
     </div>
+
+    ${renderSleepCard(rings)}
 
     <div class="card">
       <span class="section-label">What the data shows so far</span>
