@@ -25,7 +25,7 @@ const RECAP_TIME = "19:00"; // Sunday, couple's local time
 
 const LABELS: Record<string, string> = {
   faith: "Faith", us: "Us", future: "Future", reflection: "Reflection",
-  fun: "Fun", intimacy: "Intimacy", revisit: "Revisit",
+  fun: "Fun", intimacy: "Intimacy", spicy: "Spicy", revisit: "Revisit",
 };
 
 const cors = {
@@ -38,6 +38,10 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 type Payload = { title: string; body: string; tag?: string; url?: string };
+
+// Spicy questions stay off the lock screen.
+const isSpicy = (day: { wedge?: string }) => day.wedge === "spicy";
+const qText = (day: { wedge?: string; question: string }) => (isSpicy(day) ? "Tap to open twind." : day.question);
 
 async function sendTo(userIds: string[], payload: Payload) {
   if (!userIds.length) return 0;
@@ -96,7 +100,7 @@ async function daily() {
       sent += await sendTo([day.spinner], { title: "Lock in today's question", body: "You spun but haven't locked it in yet.", tag: "daily" });
     } else {
       const waiting = ids.filter((id) => !(day.answered ?? []).includes(id));
-      sent += await sendTo(waiting, { title: "Today's question is waiting", body: day.question, tag: "daily" });
+      sent += await sendTo(waiting, { title: "Today's question is waiting", body: qText(day), tag: "daily" });
     }
   }
   return sent;
@@ -136,8 +140,8 @@ Deno.serve(async (req) => {
   let sent = 0;
   if (body.event === "locked" && day.locked && day.spinner === user.id) {
     sent = await sendTo([partner.user_id], {
-      title: `${me.display_name} spun ${LABELS[day.wedge] ?? "today's question"}`,
-      body: day.question,
+      title: isSpicy(day) ? `${me.display_name} locked in today's question` : `${me.display_name} spun ${LABELS[day.wedge] ?? "today's question"}`,
+      body: qText(day),
       tag: "today",
     });
   } else if (body.event === "answered" && isPast && (day.answered ?? []).includes(user.id)) {
@@ -153,11 +157,11 @@ Deno.serve(async (req) => {
     if (!r) return json({ sent: 0 });
     const when = isPast ? `your ${dayName}` : "your";
     const msg = body.kind === "heart" && r.heart
-      ? { title: `${me.display_name} loved ${when} answer`, body: day.question }
+      ? { title: `${me.display_name} loved ${when} answer`, body: qText(day) }
       : body.kind === "more" && r.more
       ? { title: `${me.display_name} wants to hear more`, body: `About ${isPast ? dayName + "'s" : "today's"} answer. Tell them tonight.` }
       : body.kind === "reply" && r.reply
-      ? { title: `${me.display_name} replied`, body: r.reply }
+      ? { title: `${me.display_name} replied`, body: isSpicy(day) ? "Tap to read it." : r.reply }
       : null;
     if (!msg) return json({ sent: 0 });
     sent = await sendTo([partner.user_id], { ...msg, tag: `react-${day.day}-${body.kind}`, url: isPast ? dayUrl : undefined });
@@ -177,7 +181,7 @@ Deno.serve(async (req) => {
     if (wait > 0) return json({ sent: 0, reason: "too-soon", wait_minutes: wait });
     sent = await sendTo([partner.user_id], {
       title: `${me.display_name} is waiting on your answer`,
-      body: day.question,
+      body: qText(day),
       tag: "nudge",
     });
     if (sent === 0) return json({ sent: 0, reason: "no-push" });

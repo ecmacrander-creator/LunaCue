@@ -24,3 +24,5 @@
 - Missed a day? You can still answer it later. It shows as "answered late."
 - The invite code can't be changed or read by anyone outside the couple.
 - Intimacy-day answers are never sent to Gemini, for Revisit questions or the weekly recap.
+- Spicy-day answers are never sent to Gemini at all, and Spicy questions and replies stay off the lock screen.
+- Intimacy and Spicy only appear on the wheel when you've both opted in.

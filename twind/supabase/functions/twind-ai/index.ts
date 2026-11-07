@@ -70,6 +70,8 @@ Deno.serve(async (req) => {
       .eq("couple_id", me.couple_id).eq("day", body.day).maybeSingle();
     if (!day) return json({ error: "no such day" }, 404);
     if (day.talk_prompt) return json({ prompt: day.talk_prompt });
+    // Spicy answers never go to Gemini.
+    if (day.wedge === "spicy") return json({ prompt: null });
     const { data: answers } = await admin.from("answers").select("user_id, body")
       .eq("couple_id", me.couple_id).eq("day", body.day);
     if ((answers ?? []).length < 2) return json({ error: "not revealed yet" }, 400);
@@ -91,7 +93,7 @@ then give them one concrete thing to ask each other tonight. Use their names.`;
     const cutoff = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
     const { data: past } = await admin.from("days").select("day, question")
       .eq("couple_id", me.couple_id).not("talked_at", "is", null).lte("day", cutoff)
-      .neq("wedge", "intimacy").order("day", { ascending: false }).limit(60);
+      .not("wedge", "in", "(intimacy,spicy)").order("day", { ascending: false }).limit(60);
     if (!past?.length) return json({ question: null });
     const pick = past[Math.floor(Math.random() * past.length)];
     const { data: answers } = await admin.from("answers").select("user_id, body")
@@ -128,7 +130,7 @@ Under 40 words. Address them as "you" (the question is shown to both). Reply wit
       .eq("couple_id", me.couple_id).gte("day", ws).lte("day", end);
     // Intimacy answers never go to Gemini.
     const shared = (days ?? []).filter((d) =>
-      d.wedge !== "intimacy" && (answers ?? []).filter((a) => a.day === d.day).length >= 2);
+      !["intimacy", "spicy"].includes(d.wedge) && (answers ?? []).filter((a) => a.day === d.day).length >= 2);
     if (!shared.length) return json({ summary: null, reason: "empty" });
 
     const { data: cached } = await admin.from("weeks").select("*")

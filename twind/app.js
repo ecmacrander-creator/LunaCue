@@ -78,6 +78,8 @@
 
   // ---------- wedges ----------
   const WEIGHT = { off: 0, less: 0.5, normal: 1, more: 2 };
+  // Private topics: only on the wheel when you've both opted in, and never sent to Gemini.
+  const PRIVATE = new Set(["intimacy", "spicy"]);
   const wedgeById = (id) => S.bank.wedges.find((w) => w.id === id) || { id, label: id, color: "#7A2E3B", questions: [] };
   function intimacyOn() {
     return S.members.length === 2 && S.members.every((m) => m.intimacy_opt_in);
@@ -85,7 +87,7 @@
   function activeWedges() {
     const weights = (S.couple && S.couple.wedge_weights) || {};
     return S.bank.wedges.filter((w) => {
-      if (w.id === "intimacy" && !intimacyOn()) return false;
+      if (PRIVATE.has(w.id) && !intimacyOn()) return false;
       return (WEIGHT[weights[w.id] || "normal"] ?? 1) > 0;
     });
   }
@@ -441,7 +443,7 @@
     return `<button class="btn ghost save" type="button" data-action="save" data-day="${d.day}" aria-pressed="${mine}">${ICON.bookmark}${label}</button>`;
   }
   function talkBlock(d) {
-    if (!d.talk_prompt && !S.talkLoading && !S.talkTried.has(d.day)) loadTalkPrompt(d.day);
+    if (!d.talk_prompt && !S.talkLoading && !S.talkTried.has(d.day) && d.wedge !== "spicy") loadTalkPrompt(d.day);
     const prompt = d.talk_prompt || "Pick the one line from each other's answer that surprised you, and start there.";
     return `<div class="card dark stack">
         <div class="label" style="display:flex; align-items:center; gap:8px">${ICON.chat} Talk about this tonight</div>
@@ -684,7 +686,7 @@
     const bothCount = days.filter(both).length;
     const talks = days.filter((d) => d.talked_at).length;
     const done = S.todayISO >= end;
-    const shared = days.filter((d) => both(d) && d.wedge !== "intimacy").length;
+    const shared = days.filter((d) => both(d) && !PRIVATE.has(d.wedge)).length;
 
     const row = (d) => {
       const w = wedgeById(d.wedge), st = statusFor(d);
@@ -741,8 +743,9 @@
       const NOTES = {
         faith: "Prayer, gratitude, growing", us: "How we're doing", future: "Dreams, plans, family",
         reflection: "What's on your mind", fun: "Light and easy", revisit: "Follow-ups on past talks",
+        spicy: "Just for the two of you",
       };
-      const note = w.id === "intimacy" ? (intimacyOn() ? "On for both of you" : "Needs you both opted in") : NOTES[w.id] || "";
+      const note = PRIVATE.has(w.id) ? (intimacyOn() ? "On for both of you" : "Needs you both opted in") : NOTES[w.id] || "";
       return `<div class="setting">
         <span class="dot" style="background:${w.color}" aria-hidden="true"></span>
         <span class="text"><b>${esc(w.label)}</b><span>${note}</span></span>
@@ -759,8 +762,8 @@
 
       <div class="settings-list">
         <div class="setting">
-          <span class="text"><b>Include Intimacy</b><span>${esc(p)} is ${S.partner.intimacy_opt_in ? "in" : "not in yet"}. It only shows up when you're both in.</span></span>
-          <label class="switch"><input type="checkbox" data-action="intimacy" ${S.me.intimacy_opt_in ? "checked" : ""} aria-label="Include Intimacy questions"><span></span></label>
+          <span class="text"><b>Include Intimacy and Spicy</b><span>${esc(p)} is ${S.partner.intimacy_opt_in ? "in" : "not in yet"}. They only show up when you're both in.</span></span>
+          <label class="switch"><input type="checkbox" data-action="intimacy" ${S.me.intimacy_opt_in ? "checked" : ""} aria-label="Include Intimacy and Spicy questions"><span></span></label>
         </div>
         <div class="setting">
           <span class="text"><b>Daily nudge</b><span>A reminder if today's question is still waiting</span></span>
