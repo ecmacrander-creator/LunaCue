@@ -25,31 +25,59 @@ Write warmly and plainly, like a wise friend who knows them, never like a therap
 No cliches, no em dashes, no emojis, no hashtags. Never judge, score or take sides.
 Keep anything intimate tasteful. Reply with only the text asked for.`;
 
-async function gemini(prompt: string, asJson = false): Promise<string | null> {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) return null;
-  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+// Gemini sometimes answers 503 "high demand" or 429. Retry once, then try backup models,
+// all inside ~17 seconds so the app (which waits 20) still gets an answer.
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+
+async function callModel(model: string, key: string, prompt: string, asJson: boolean, thinking: boolean, ms: number) {
+  return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
+    signal: AbortSignal.timeout(ms),
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.8, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: "low" },
+        temperature: 0.8, maxOutputTokens: 4096,
+        ...(thinking ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
         ...(asJson ? { responseMimeType: "application/json" } : {}),
       },
     }),
   });
-  if (!res.ok) {
-    console.error("gemini error", res.status, await res.text());
-    return null;
+}
+
+async function gemini(prompt: string, asJson = false): Promise<string | null> {
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key) { console.error("GEMINI_API_KEY is not set"); return null; }
+  const main = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
+  const plan = [main, main, "gemini-flash-latest", "gemini-flash-lite-latest"]
+    .filter((m, i, a) => i < 2 || !a.slice(0, i).includes(m));
+  const deadline = Date.now() + 17000;
+  for (let i = 0; i < plan.length; i++) {
+    const left = deadline - Date.now();
+    if (left < 2500) break;
+    if (i === 1) await new Promise((r) => setTimeout(r, 800));
+    try {
+      let res = await callModel(plan[i], key, prompt, asJson, true, Math.min(left, 9000));
+      // Older backup models don't take thinkingLevel; try once more without it.
+      if (res.status === 400) res = await callModel(plan[i], key, prompt, asJson, false, Math.max(2000, Math.min(deadline - Date.now(), 9000)));
+      if (!res.ok) {
+        console.error("gemini error", plan[i], res.status, (await res.text()).slice(0, 300));
+        if (RETRYABLE.has(res.status) || res.status === 404 || res.status === 400) continue;
+        return null;
+      }
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts ?? [])
+        .filter((p: { thought?: boolean }) => !p.thought)
+        .map((p: { text?: string }) => p.text ?? "").join("").trim();
+      if (!text) { console.error("gemini empty", plan[i], data.candidates?.[0]?.finishReason); continue; }
+      if (i > 0) console.log("gemini ok on try", i + 1, plan[i]);
+      return text.replace(/^["'“]+|["'”]+$/g, "").replace(/\s*—\s*/g, ", ").trim();
+    } catch (e) {
+      console.error("gemini failed", plan[i], (e as Error).message);
+    }
   }
-  const data = await res.json();
-  const text = (data.candidates?.[0]?.content?.parts ?? [])
-    .map((p: { text?: string }) => p.text ?? "").join("").trim();
-  if (!text) return null;
-  return text.replace(/^["'“]+|["'”]+$/g, "").replace(/\s*—\s*/g, ", ").trim();
+  return null;
 }
 
 Deno.serve(async (req) => {

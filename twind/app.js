@@ -15,7 +15,7 @@
     busy: false, pushOn: false, talkLoading: false, editing: false,
     authMode: "signin", recovery: false, pairMode: null, notice: null, dirty: false,
     rx: {}, catchup: [], dayView: null, back: "today", week: null, weekStart: null,
-    replyEdit: null, talkTried: new Set(), pendingDay: null,
+    replyEdit: null, talkTried: new Map(), pendingDay: null,
   };
 
   // ---------- small helpers ----------
@@ -442,9 +442,27 @@
     const label = mine ? "Saved for later" : theirs ? `${esc(S.partner.display_name)} saved this for later` : "Save for later";
     return `<button class="btn ghost save" type="button" data-action="save" data-day="${d.day}" aria-pressed="${mine}">${ICON.bookmark}${label}</button>`;
   }
+  // Used when Gemini is busy, and always on Intimacy and Spicy days (those never go to Gemini).
+  const TALK_BACKUP = {
+    faith: ["Take turns praying out loud for the thing the other one wrote about.", "Ask each other: where do you want me to stand with you on this, spiritually?", "Read both answers again and ask: what would trusting God with this look like this week?"],
+    us: ["Ask each other: what's one thing from my answer you'd want me to say more about?", "Each of you name one small thing the other could do this week, based on what they wrote.", "Ask: did anything in my answer surprise you? Start there."],
+    future: ["Ask each other: what's one step we could take toward this in the next month?", "Where do your answers line up, and where do they pull in different directions? Talk through one.", "Ask: what would need to be true for this to actually happen?"],
+    reflection: ["Ask each other: what's one way I can help with what you wrote about?", "Ask: how long have you been carrying this, and who else knows?", "Each of you say one thing you admire about how the other answered."],
+    fun: ["Pick the best idea from either answer and put it on the calendar.", "Ask each other a follow-up question about the funniest part of the other's answer.", "Ask: what's the story behind your answer?"],
+    intimacy: ["Read each other's answers out loud, then ask: what's one thing from mine you'd want this week?", "Ask: what did you hold back when you wrote this?", "Each of you name one thing from the other's answer you can do tonight."],
+    spicy: ["Read each other's answers, then ask: which one should we try first?", "Ask: what did you leave out of your answer?", "Each of you pick one line from the other's answer and say why it got your attention."],
+    revisit: ["Ask each other: has anything changed since the first time we talked about this?", "Ask: what did we decide last time, and did we actually do it?", "Pick the line from each other's answer that surprised you, and start there."],
+  };
+  function backupTalk(d) {
+    const list = TALK_BACKUP[d.wedge] || TALK_BACKUP.us;
+    const n = [...d.day].reduce((t, c) => t + c.charCodeAt(0), 0);
+    return list[n % list.length];
+  }
+  const TALK_RETRY_MS = 2 * 60 * 1000;
   function talkBlock(d) {
-    if (!d.talk_prompt && !S.talkLoading && !S.talkTried.has(d.day) && !PRIVATE.has(d.wedge)) loadTalkPrompt(d.day);
-    const prompt = d.talk_prompt || "Pick the one line from each other's answer that surprised you, and start there.";
+    const tried = S.talkTried.get(d.day);
+    if (!d.talk_prompt && !S.talkLoading && !PRIVATE.has(d.wedge) && (!tried || Date.now() - tried > TALK_RETRY_MS)) loadTalkPrompt(d.day);
+    const prompt = d.talk_prompt || backupTalk(d);
     return `<div class="card dark stack">
         <div class="label" style="display:flex; align-items:center; gap:8px">${ICON.chat} Talk about this tonight</div>
         <p style="margin:0; font-size:16px; line-height:1.45">${esc(prompt)}</p>
@@ -808,12 +826,15 @@
   // ---------- actions ----------
   async function loadTalkPrompt(day) {
     S.talkLoading = true;
-    S.talkTried.add(day);
+    S.talkTried.set(day, Date.now());
     const res = await ai({ action: "talk", day }, 20000);
     S.talkLoading = false;
     if (res && res.prompt) {
       patchDay(day, { talk_prompt: res.prompt });
       safeRender();
+    } else {
+      // Gemini was busy. Try again in a couple of minutes if this screen is still up.
+      setTimeout(() => safeRender(), TALK_RETRY_MS + 1000);
     }
   }
 
