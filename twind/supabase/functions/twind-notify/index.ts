@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
       title: `${me.display_name} answered ${dayName}'s question`,
       body: (day.answered ?? []).includes(partner.user_id)
         ? "Tap to see both answers."
-        : "Tap to read it, and add yours if you want.",
+        : "Add yours to see each other's answers.",
       tag: "late-" + day.day,
       url: dayUrl,
     });

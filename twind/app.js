@@ -457,7 +457,7 @@
     return S.catchup.slice(0, 2).map((d) => `
       <button class="card paper catchup" type="button" data-action="open-day" data-day="${d.day}">
         <span class="text"><b>${esc(S.partner.display_name)} answered ${esc(prettyDate(d.day, { weekday: "long" }))}'s question</b>
-        <span>Read theirs and add yours</span></span>${ICON.next}
+        <span>Add yours to see theirs</span></span>${ICON.next}
       </button>`).join("");
   }
 
@@ -544,7 +544,7 @@
         <div class="stack">
           ${chip(d.spinner === S.user.id ? " · you spun" : ` · ${partner} spun`)}
           <h1 class="question" style="font-size: 30px">${esc(d.question)}</h1>
-          <p class="sub" style="color: var(--plum)">${theirs ? `${partner} already answered. Yours reveals both.` : `${partner} sees your answer once they answer too, or at midnight.`}</p>
+          <p class="sub" style="color: var(--plum)">${theirs ? `${partner} already answered. Yours reveals both.` : `${partner} sees your answer once they answer too.`}</p>
         </div>
         <form class="stack lg" data-form="answer" style="flex: 1">
           <div class="field" style="flex: 1">
@@ -559,7 +559,7 @@
       body = `<div class="grow">
           ${ICON.lock}
           <h1>Your answer is in</h1>
-          <p class="sub">You'll both see each other's answers as soon as ${partner} answers. If they don't get to it, yours unlocks for them at midnight.</p>
+          <p class="sub">You'll both see each other's answers as soon as ${partner} answers.</p>
           <button class="btn ghost" type="button" data-action="nudge" style="max-width: 280px" ${recently || S.busy ? "disabled" : ""}>${recently ? `Nudged ${partner}` : `Nudge ${partner}`}</button>
           <button class="btn link" type="button" data-action="edit">Edit my answer</button>
         </div>${pushNudge()}`;
@@ -608,7 +608,7 @@
       const mine = answers.find((a) => a.day === d.day && a.user_id === S.user.id);
       const theirs = answers.find((a) => a.day === d.day && a.user_id === S.partner.user_id);
       const isToday = d.day === S.todayISO;
-      const hidden = !theirs && isToday && (d.answered || []).includes(S.partner.user_id);
+      const hidden = !theirs && (d.answered || []).includes(S.partner.user_id);
       const canLate = !isToday && !mine;
       return `<details class="day">
         <summary>
@@ -619,7 +619,7 @@
         <div class="body">
           ${answerBlock(mine, true, false)}
           ${answerBlock(theirs, false, false)}
-          ${hidden ? `<p class="sub">${esc(S.partner.display_name)}'s answer shows once you answer, or at midnight.</p>` : ""}
+          ${hidden ? `<p class="sub">${esc(S.partner.display_name)}'s answer shows once you answer.</p>` : ""}
           ${d.talk_prompt ? `<p class="sub"><b>Talk prompt:</b> ${esc(d.talk_prompt)}</p>` : ""}
           ${!mine && !theirs && !hidden ? '<p class="sub">No answers that day.</p>' : ""}
           ${!isToday && (canLate || theirs) ? `<button class="btn link" type="button" data-action="open-day" data-day="${d.day}" style="align-self:flex-start">${canLate ? "Answer it now" : "React or reply"}</button>` : ""}
@@ -661,6 +661,9 @@
     const draftKey = "twind-draft-" + d.day;
     let body = `<div class="stack">${theirs ? answerBlock(theirs, false) : ""}${mine ? answerBlock(mine, true) : ""}</div>`;
     if (!mine) {
+      if ((d.answered || []).includes(S.partner.user_id)) {
+        body += `<div class="card paper"><p class="sub" style="color: var(--ink); margin:0">${p} answered this one. Add yours to see theirs.</p></div>`;
+      }
       body += `<form class="stack lg" data-form="late" data-day="${d.day}">
         <div class="field">
           <label for="late-ans">Your answer</label>

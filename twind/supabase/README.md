@@ -7,6 +7,7 @@
 | `functions/twind-ai/index.ts` | Gemini: "talk about this tonight" prompts, Revisit questions and the weekly recap | Edge Function named `twind-ai`, Verify JWT off |
 | `patch-week.sql` | Midnight unlock, late answers, reactions and replies, save for later, weekly recap | SQL Editor, run once |
 | `patch-lock.sql` | Lets the other person lock in a spin after 30 minutes; never-locked past days can be answered late | SQL Editor, run once |
+| `patch-blind.sql` | Partner's answer stays hidden until you answer, even on missed days (replaces the midnight unlock) | SQL Editor, run once |
 | `cron.sql` | Runs the daily nudge every 30 minutes | SQL Editor, run once after the functions are deployed |
 
 ## Secrets (Edge Functions > Secrets)
@@ -21,7 +22,7 @@
 ## Privacy model
 
 - Each person sees only their own couple's data.
-- Your partner's answer is hidden from you until you have both answered, or until midnight that day (enforced by the database, not the app).
+- Your partner's answer is hidden from you until you have both answered, including on past days you missed (enforced by the database, not the app).
 - Missed a day? You can still answer it later. It shows as "answered late."
 - The invite code can't be changed or read by anyone outside the couple.
 - Intimacy and Spicy answers are never sent to Gemini: not for talk prompts, Revisit questions or the weekly recap.
