@@ -443,7 +443,7 @@
     return `<button class="btn ghost save" type="button" data-action="save" data-day="${d.day}" aria-pressed="${mine}">${ICON.bookmark}${label}</button>`;
   }
   function talkBlock(d) {
-    if (!d.talk_prompt && !S.talkLoading && !S.talkTried.has(d.day) && d.wedge !== "spicy") loadTalkPrompt(d.day);
+    if (!d.talk_prompt && !S.talkLoading && !S.talkTried.has(d.day) && !PRIVATE.has(d.wedge)) loadTalkPrompt(d.day);
     const prompt = d.talk_prompt || "Pick the one line from each other's answer that surprised you, and start there.";
     return `<div class="card dark stack">
         <div class="label" style="display:flex; align-items:center; gap:8px">${ICON.chat} Talk about this tonight</div>
@@ -459,6 +459,14 @@
         <span class="text"><b>${esc(S.partner.display_name)} answered ${esc(prettyDate(d.day, { weekday: "long" }))}'s question</b>
         <span>Read theirs and add yours</span></span>${ICON.next}
       </button>`).join("");
+  }
+
+  // The spinner gets 30 minutes to lock it in before the other person can.
+  const LOCK_GRACE_MS = 30 * 60 * 1000;
+  let lockTimer = null;
+  function lockWaitMs(d) {
+    const since = new Date(d.spun_at || d.created_at).getTime();
+    return Math.max(0, since + LOCK_GRACE_MS - Date.now());
   }
 
   function stageOf() {
@@ -511,10 +519,22 @@
             : `<p class="sub" style="text-align:center; font-size: 13px">No re-spins left. This one's yours today.</p>`}
         </div>`;
     } else if (stage === "partner-spinning") {
-      body = `<div class="grow">
-          <h1>${partner} is spinning</h1>
-          <p class="sub">They got here first today. You'll see the question as soon as they lock it in.</p>
-        </div>${pushNudge()}`;
+      const left = lockWaitMs(d);
+      if (left > 0) {
+        clearTimeout(lockTimer);
+        lockTimer = setTimeout(() => { if (S.view === "today") safeRender(); }, left + 1000);
+        body = `<div class="grow">
+            <h1>${partner} is spinning</h1>
+            <p class="sub">They got here first today. You'll see the question as soon as they lock it in. If they haven't locked it in within ${Math.ceil(left / 60000)} minutes, you can.</p>
+          </div>${pushNudge()}`;
+      } else {
+        body = `
+          <div class="stack"><h1>${partner} spun but didn't lock it in</h1><p class="sub">You can lock it in for both of you.</p></div>
+          <div class="stack lg push">
+            <div class="card stack">${chip()}<p class="question">${esc(d.question)}</p></div>
+            <button class="btn" type="button" data-action="lock" ${S.busy ? "disabled" : ""}>Lock it in</button>
+          </div>`;
+      }
     } else if (stage === "answer") {
       const draftKey = "twind-draft-" + d.day;
       const mine = S.answers.find((a) => a.user_id === S.user.id);
@@ -589,7 +609,7 @@
       const theirs = answers.find((a) => a.day === d.day && a.user_id === S.partner.user_id);
       const isToday = d.day === S.todayISO;
       const hidden = !theirs && isToday && (d.answered || []).includes(S.partner.user_id);
-      const canLate = !isToday && d.locked && !mine;
+      const canLate = !isToday && !mine;
       return `<details class="day">
         <summary>
           <span class="row"><span class="chip" style="background:${w.color}; font-size:12px; padding:3px 10px">${esc(w.label)}</span>
@@ -639,26 +659,21 @@
     const mine = v.answers.find((a) => a.user_id === S.user.id);
     const theirs = v.answers.find((a) => a.user_id === S.partner.user_id);
     const draftKey = "twind-draft-" + d.day;
-    let body = "";
-    if (!d.locked) {
-      body = `<p class="sub">This question was never locked in.</p>`;
-    } else {
-      body = `<div class="stack">${theirs ? answerBlock(theirs, false) : ""}${mine ? answerBlock(mine, true) : ""}</div>`;
-      if (!mine) {
-        body += `<form class="stack lg" data-form="late" data-day="${d.day}">
-          <div class="field">
-            <label for="late-ans">Your answer</label>
-            <textarea class="input" id="late-ans" name="body" data-draft="${esc(draftKey)}" placeholder="It's not too late. Be honest." maxlength="5000" required>${esc(store.get(draftKey) || "")}</textarea>
-          </div>
-          <button class="btn" type="submit" ${S.busy ? "disabled" : ""}>Add my answer</button>
-          <p class="sub" style="text-align:center; font-size: 13px">${p} gets a heads-up. It shows as answered late.</p>
-        </form>`;
-      } else if (!theirs) {
-        body += `<p class="sub">${p} didn't answer this one.</p>`;
-      }
-      if (mine || theirs) body += saveBtn(d);
-      if (mine && theirs) body += `<div class="stack lg">${talkBlock(d)}</div>`;
+    let body = `<div class="stack">${theirs ? answerBlock(theirs, false) : ""}${mine ? answerBlock(mine, true) : ""}</div>`;
+    if (!mine) {
+      body += `<form class="stack lg" data-form="late" data-day="${d.day}">
+        <div class="field">
+          <label for="late-ans">Your answer</label>
+          <textarea class="input" id="late-ans" name="body" data-draft="${esc(draftKey)}" placeholder="It's not too late. Be honest." maxlength="5000" required>${esc(store.get(draftKey) || "")}</textarea>
+        </div>
+        <button class="btn" type="submit" ${S.busy ? "disabled" : ""}>Add my answer</button>
+        <p class="sub" style="text-align:center; font-size: 13px">${p} gets a heads-up. It shows as answered late.</p>
+      </form>`;
+    } else if (!theirs) {
+      body += `<p class="sub">${p} didn't answer this one.</p>`;
     }
+    if (mine || theirs) body += saveBtn(d);
+    if (mine && theirs) body += `<div class="stack lg">${talkBlock(d)}</div>`;
     $app.innerHTML = `<main class="shell">${backBar(`<span class="date">${esc(prettyDate(d.day))}</span>`)}
       <div class="stack"><span class="chip" style="background:${w.color}">${esc(w.label)}</span>
       <h1 class="question" style="font-size: 28px">${esc(d.question)}</h1></div>

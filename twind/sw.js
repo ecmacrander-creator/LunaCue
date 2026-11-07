@@ -1,5 +1,5 @@
 // twind service worker: offline shell + push notifications.
-const CACHE = "twind-v5";
+const CACHE = "twind-v6";
 const ASSETS = ["./", "index.html", "styles.css", "app.js", "config.js", "questions.json", "mark.svg", "icon-192.png"];
 
 self.addEventListener("install", (e) => {

@@ -70,8 +70,8 @@ Deno.serve(async (req) => {
       .eq("couple_id", me.couple_id).eq("day", body.day).maybeSingle();
     if (!day) return json({ error: "no such day" }, 404);
     if (day.talk_prompt) return json({ prompt: day.talk_prompt });
-    // Spicy answers never go to Gemini.
-    if (day.wedge === "spicy") return json({ prompt: null });
+    // Intimacy and Spicy answers never go to Gemini.
+    if (["intimacy", "spicy"].includes(day.wedge)) return json({ prompt: null });
     const { data: answers } = await admin.from("answers").select("user_id, body")
       .eq("couple_id", me.couple_id).eq("day", body.day);
     if ((answers ?? []).length < 2) return json({ error: "not revealed yet" }, 400);

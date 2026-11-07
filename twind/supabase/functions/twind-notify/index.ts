@@ -138,16 +138,21 @@ Deno.serve(async (req) => {
   const dayUrl = `?day=${day.day}`;
 
   let sent = 0;
-  if (body.event === "locked" && day.locked && day.spinner === user.id) {
+  if (body.event === "locked" && day.locked) {
+    // Usually the spinner locks it in. After 30 minutes the other person can too.
     sent = await sendTo([partner.user_id], {
-      title: isSpicy(day) ? `${me.display_name} locked in today's question` : `${me.display_name} spun ${LABELS[day.wedge] ?? "today's question"}`,
+      title: isSpicy(day) || day.spinner !== user.id
+        ? `${me.display_name} locked in today's question`
+        : `${me.display_name} spun ${LABELS[day.wedge] ?? "today's question"}`,
       body: qText(day),
       tag: "today",
     });
   } else if (body.event === "answered" && isPast && (day.answered ?? []).includes(user.id)) {
     sent = await sendTo([partner.user_id], {
       title: `${me.display_name} answered ${dayName}'s question`,
-      body: "Tap to see both answers.",
+      body: (day.answered ?? []).includes(partner.user_id)
+        ? "Tap to see both answers."
+        : "Tap to read it, and add yours if you want.",
       tag: "late-" + day.day,
       url: dayUrl,
     });

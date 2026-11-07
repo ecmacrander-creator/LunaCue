@@ -6,6 +6,7 @@
 | `functions/twind-notify/index.ts` | Push notifications (locked in, answered, late answers, reactions, daily nudge, Sunday 7 PM recap) | Edge Function named `twind-notify`, Verify JWT off |
 | `functions/twind-ai/index.ts` | Gemini: "talk about this tonight" prompts, Revisit questions and the weekly recap | Edge Function named `twind-ai`, Verify JWT off |
 | `patch-week.sql` | Midnight unlock, late answers, reactions and replies, save for later, weekly recap | SQL Editor, run once |
+| `patch-lock.sql` | Lets the other person lock in a spin after 30 minutes; never-locked past days can be answered late | SQL Editor, run once |
 | `cron.sql` | Runs the daily nudge every 30 minutes | SQL Editor, run once after the functions are deployed |
 
 ## Secrets (Edge Functions > Secrets)
@@ -23,6 +24,6 @@
 - Your partner's answer is hidden from you until you have both answered, or until midnight that day (enforced by the database, not the app).
 - Missed a day? You can still answer it later. It shows as "answered late."
 - The invite code can't be changed or read by anyone outside the couple.
-- Intimacy-day answers are never sent to Gemini, for Revisit questions or the weekly recap.
-- Spicy-day answers are never sent to Gemini at all, and Spicy questions and replies stay off the lock screen.
+- Intimacy and Spicy answers are never sent to Gemini: not for talk prompts, Revisit questions or the weekly recap.
+- Spicy questions and replies stay off the lock screen.
 - Intimacy and Spicy only appear on the wheel when you've both opted in.
