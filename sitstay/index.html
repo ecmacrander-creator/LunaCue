@@ -118,7 +118,24 @@ body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
 .weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:.72rem;font-weight:800;color:var(--muted);margin-top:-8px}
 .top{display:flex;align-items:center;gap:10px}
 .link.on{border-color:var(--ok);color:var(--ok)}
-.link{font-family:var(--font-display);font-size:.72rem;background:none;border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 10px;cursor:pointer}
+.top{flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.colhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.colhead b{font-family:var(--font-display);font-size:1.1rem;color:var(--accent)}
+.colbar{height:6px;border-radius:2px;background:var(--line);overflow:hidden}.colbar i{display:block;height:100%;background:var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.tile{background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:6px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;min-width:0}
+.tile img{width:100%;image-rendering:pixelated;border-radius:6px;background:var(--lcd)}
+.tile span{font-weight:800;font-size:.74rem;line-height:1.15}
+.tile small{font-size:.66rem;color:var(--muted);font-weight:700}
+.tile.locked span{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-weight:800;font-size:.78rem;padding:7px 10px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg)}
+.chip.on{border-color:var(--ok);color:var(--ok)}
+.chip.locked{color:var(--muted);border-style:dashed}
+.best{font-family:var(--font-display);font-size:.8rem;margin:-6px 0 0;color:var(--muted)}
+.best.new{color:var(--ok);animation:pop .5s cubic-bezier(.2,1.6,.4,1)}
+.tmrw{display:flex;gap:6px;flex-wrap:wrap}
+.link{font-family:var(--font-display);font-size:.64rem;background:none;border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 8px;cursor:pointer}
 .graves{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
 .grave{background:var(--bg);border:2px solid var(--line);border-radius:60px 60px 8px 8px;padding:22px 12px 14px;text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0}
 .grave.ran{border-style:dashed;border-radius:8px}
@@ -152,7 +169,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
 <div class="app">
   <header>
     <div><h1>SitStay</h1><div class="date" id="today"></div></div>
-    <div class="top"><button class="link" id="openSettings">Settings</button><button class="link" id="openGraves">Graveyard</button></div>
+    <div class="top"><button class="link" id="openSettings">Settings</button><button class="link" id="openCol">Collection</button><button class="link" id="openGraves">Graveyard</button></div>
   </header>
 
   <div class="shell">
@@ -191,12 +208,17 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
   <div class="card" role="dialog" aria-labelledby="sumTitle">
     <h2 id="sumTitle">Today with Bort</h2>
     <div class="score"><span class="n" id="sumScore">0</span><span class="l">Good dog points</span></div>
+    <p class="best" id="sumBest"></p>
     <p class="verdict" id="sumVerdict"></p>
     <dl class="rows" id="sumRows"></dl>
     <p class="sub">Enrichment</p>
     <dl class="rows" id="sumActs"></dl>
     <p class="sub">Care</p>
     <dl class="rows" id="sumCare"></dl>
+    <p class="sub">Streak and dog years</p>
+    <dl class="rows" id="sumStreak"></dl>
+    <p class="sub">Tomorrow's enrichment</p>
+    <div class="tmrw" id="sumTomorrow"></div>
     <p class="sub">Focus, last 7 days</p>
     <div class="week" id="week"></div>
     <div class="weekdays" id="weekdays"></div>
@@ -250,6 +272,18 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
   </div>
 </div>
 
+<div class="sheet" id="col" hidden>
+  <div class="card" role="dialog" aria-labelledby="colTitle">
+    <div class="colhead"><h2 id="colTitle">Collection</h2><b id="colCount">0 / 0</b></div>
+    <div class="colbar"><i id="colFill"></i></div>
+    <p class="note">Everything any of your pups has unlocked. Gray shapes are still out there.</p>
+    <p class="sub">Accessories</p><div class="tiles" id="colWear"></div>
+    <p class="sub">Tricks</p><div class="chips" id="colTricks"></div>
+    <p class="sub">Pup looks</p><div class="tiles" id="colLooks"></div>
+    <div class="actions"><button class="btn primary" id="colClose">Done</button></div>
+  </div>
+</div>
+
 <div class="sheet" id="graves" hidden>
   <div class="card" role="dialog" aria-labelledby="gravesTitle">
     <h2 id="gravesTitle">Graveyard</h2>
@@ -271,6 +305,10 @@ const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat'
 const RARE_TRICKS = ['Moonwalk!','Bow!','Wave!'];
 const FINDS = ['a sock. It is his now.', 'a tennis ball older than he is.', 'half a sandwich. No questions.', 'a stick of incredible quality.', 'a squeaky duck.', 'a very important leaf.'];
 const SURPRISE_ODDS = 0.2; // 1 in 5 finished activities
+const HAPPY = 12 * 60000;  // happy meter fills every 12 focused minutes (offset from the 10/20/25 milestones)
+const MAX_SAVERS = 2;
+const TRAIT_NAMES = {'ears:up':'Pointy ears','ears:fold':'Floppy ears','ears:one':'One floppy ear','tail:curl':'Curly tail','tail:straight':'Straight tail','tail:stub':'Stub tail',
+  'mark:none':'Plain coat','mark:saddle':'Back patch','mark:eyepatch':'Eye patch','snout:short':'Short snout','snout:long':'Long snout','size:0.9':'Small pup','size:1':'Medium pup','size:1.12':'Big pup'};
 const GRACE = 10000;
 const GOAL = 30 * 60000;
 const MIN = 60000;
@@ -350,6 +388,7 @@ function day(k){
   k = k || todayKey();
   if(!store.days[k]) store.days[k] = {focusMs:0,longestMs:0,streakMs:0,leaves:0,awayMs:0,ended:false,startedAt:0,acts:pick3(k),actMs:{},actCount:{},done:{}};
   const d = store.days[k];
+  if(d.dances == null) d.dances = Math.floor((d.focusMs || 0)/HAPPY);
   if(d.poops == null){ d.poops = 0; d.cleaned = 0; d.nextPoop = between(15,30); d.hungry = false; d.nextHunger = 0; d.unfedMs = 0; d.meals = 0; }
   return d;
 }
@@ -357,6 +396,27 @@ function currentAct(){
   const d = day();
   if(!store.activity || d.acts.indexOf(store.activity) < 0) store.activity = d.acts.find(a => !d.done[a]) || d.acts[0];
   return store.activity;
+}
+/* ---------- streak: days in a row with all 3 activities done; savers cover a missed day ---------- */
+function streakFrom(dt){
+  dt = new Date(dt); let n = 0; const saved = store.saved || {};
+  for(let i=0;i<3000;i++){ const k = keyOf(dt); if(dayComplete(store.days[k])) n++; else if(!saved[k]) break; dt.setDate(dt.getDate()-1); }
+  return n;
+}
+function streak(){ const t = new Date(); if(!dayComplete(store.days[keyOf(t)])) t.setDate(t.getDate()-1); return streakFrom(t); }
+function settleStreak(){
+  store.saved = store.saved || {}; store.savers = store.savers || 0;
+  const y = new Date(); y.setDate(y.getDate()-1); const yk = keyOf(y);
+  if(!store.streakChecked){ store.streakChecked = yk; return; }
+  const dt = new Date(store.streakChecked+'T12:00:00'); dt.setDate(dt.getDate()+1);
+  let used = 0;
+  for(let i=0;i<400 && keyOf(dt) <= yk;i++){
+    const k = keyOf(dt);
+    if(!dayComplete(store.days[k]) && !store.saved[k] && store.savers > 0){ const prev = new Date(dt); prev.setDate(prev.getDate()-1); if(streakFrom(prev) > 0){ store.saved[k] = true; store.savers--; used++; } }
+    dt.setDate(dt.getDate()+1);
+  }
+  store.streakChecked = yk;
+  if(used) setTimeout(() => showToast('Streak saver used. Your '+streak()+'-day streak is safe.'), 1500);
 }
 function canClean(){ const d = day(); return d.poops > 0 && (store.mode !== 'playing' || !!d.done[currentAct()]); }
 
@@ -393,10 +453,11 @@ document.addEventListener('pointerdown', () => { if(store.mode === 'playing') re
 setInterval(() => { if(store.mode === 'playing' && document.visibilityState === 'visible' && (!wake || (awakeVid && awakeVid.paused))) requestWake(); }, 20000);
 
 /* ---------- focus + care logic ---------- */
-const A = {hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
+const A = {danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
 
 function rollover(){
   if(store.day && store.day !== todayKey()){
+    setTimeout(settleStreak, 0);
     if(store.mode === 'playing' || store.mode === 'break' || store.mode === 'free'){ const old = day(store.day); old.ended = true; old.streakMs = 0; ageUp(store.day); }
     store.mode = 'idle'; store.day = todayKey(); store.activity = null; releaseWake(); save(); buildCards(); render();
   }
@@ -405,11 +466,17 @@ function resetProgress(d){ let lost = false; d.acts.forEach(a => { if(!d.done[a]
 function registerAway(away, now){
   const d = day(); d.leaves++; d.awayMs += away; d.streakMs = 0;
   const lost = resetProgress(d);
-  A.returnStart = now; A.returnUntil = now + 3500;
-  showToast(PUP+' waited by the door for '+(away < MIN ? Math.round(away/1000)+' sec' : fmt(away))+(lost ? '. Activity minutes start over.' : ''));
+  greet(away, now);
+  showToast(PUP+' missed you'+(away >= 10*MIN ? ' so much' : '')+'! Away '+(away < MIN ? Math.round(away/1000)+' sec' : fmt(away))+(lost ? '. Activity minutes start over.' : '.'));
   save();
 }
 /* ---------- rewards: sound, burst overlay, surprises, milestones ---------- */
+// The longer you were gone, the bigger the welcome: 1 = happy hops, 2 = one zoomie lap, 3 = two laps with hearts.
+function greet(away, now){
+  const lvl = away < MIN ? 1 : away < 10*MIN ? 2 : 3;
+  A.returnLevel = lvl; A.returnStart = now; A.returnUntil = now + [0, 2600, 4200, 6000][lvl];
+  setTimeout(() => beep(lvl === 1 ? SFX.tick : SFX.hello), 700);
+}
 const PARTY = 5200;
 let actx = null;
 function audio(){
@@ -422,7 +489,10 @@ document.addEventListener('pointerdown', () => { if(store.sound !== false) audio
 const SFX = {
   win: [[523,.09],[659,.09],[784,.09],[1047,.2],[0,.06],[784,.09],[1047,.4]],
   surprise: [[1319,.07],[1568,.07],[2093,.07],[2637,.22]],
-  tick: [[880,.07],[1175,.13]]
+  tick: [[880,.07],[1175,.13]],
+  hello: [[784,.08],[988,.08],[784,.08],[1175,.18]],
+  dance: [[659,.1],[784,.1],[659,.1],[880,.1],[784,.1],[988,.25]],
+  best: [[523,.12],[659,.12],[784,.12],[1047,.12],[1319,.4]]
 };
 function beep(notes){
   const c = audio(); if(!c) return;
@@ -464,13 +534,22 @@ function rollSurprise(){
 }
 function celebrate(a, left){
   beep(SFX.win); buzz([90,50,90,50,260]);
-  showBurst('', left ? 'Good dog points' : 'All 3 done!', PARTY - 400, 20);
+  let label = 'Good dog points';
+  if(!left){
+    const n = streak(), d = day(); label = n > 1 ? n+'-day streak!' : 'All 3 done!';
+    if(n > 0 && n % 7 === 0 && !d.saverGiven){ d.saverGiven = true; store.savers = Math.min(MAX_SAVERS, (store.savers || 0) + 1); setTimeout(() => showToast('Perfect week! You earned a streak saver.'), 9000); }
+  }
+  showBurst('', label, PARTY - 400, 20);
   const sur = rollSurprise();
   if(sur){
     setTimeout(() => { beep(SFX.surprise); buzz([40,30,40]); burstNote(sur.line, 3600); }, 1900);
     A.partyUntil += 1800;
   }
   setTimeout(() => showToast(sur && sur.toast ? sur.toast : left ? PUP+' finished '+ACTS[a].name+'. Pick the next one.' : 'All three done. '+PUP+' is one happy pup.'), sur ? 5600 : 1200);
+}
+function dance(now){
+  A.danceStart = Math.max(now, A.partyUntil, A.returnUntil) + 200; A.danceUntil = A.danceStart + 3200;
+  setTimeout(() => { beep(SFX.dance); showBurst('Dance!', 'Happy meter full', 2600); }, A.danceStart - now);
 }
 function milestone(m, now){
   A.hopStart = now; A.sparkUntil = now + 1600;
@@ -491,6 +570,7 @@ function tick(now){
     if(dt > GRACE) registerAway(dt, now);
     else {
       d.focusMs += dt; d.streakMs += dt; if(d.streakMs > d.longestMs) d.longestMs = d.streakMs;
+      const dn = Math.floor(d.focusMs/HAPPY); if(dn > d.dances){ d.dances = dn; dance(now); }
       const before = d.actMs[a] || 0;
       d.actMs[a] = before + dt;
       if(!d.done[a]) [10,20,25].forEach(mm => { if(before < mm*MIN && d.actMs[a] >= mm*MIN) milestone(mm, now); });
@@ -535,7 +615,7 @@ window.addEventListener('pagehide', () => { if(store.mode === 'playing') store.h
 function startDay(){
   if(store.pet.dead){ openDead(); return; }
   const d = day(); store.day = todayKey(); store.mode = 'playing';
-  if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; showToast(PUP+' wants breakfast. Tap Feed.'); }
+  if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; greet(10*MIN, Date.now()); showToast('Good morning! '+PUP+' wants breakfast. Tap Feed.'); }
   else if(sinceFun(Date.now()) >= RESTLESS*DAY) showToast(PUP+' is restless. Finish an activity today.');
   d.sessions = (d.sessions || 0) + 1;
   d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
@@ -605,7 +685,7 @@ function vet(){
 }
 function layToRest(){
   const pt = store.pet;
-  store.graveyard.push({name:pt.name, age:pt.age, born:pt.born, died:pt.diedAt || Date.now(), cause:pt.cause || 'starved', look:pt.look || LOOK0});
+  store.graveyard.push({name:pt.name, age:pt.age, born:pt.born, died:pt.diedAt || Date.now(), cause:pt.cause || 'starved', look:pt.look || LOOK0, rare:pt.rare || [], tricks:pt.tricks || []});
   save(); closeSheet('#dead');
   $('#adoptText').textContent = pt.cause === 'ran' ? pt.name+' is out there somewhere chasing squirrels. A new puppy is waiting for a home. Each pup looks a little different.' : pt.name+' is resting in the graveyard. A new puppy is waiting for a home. Each pup looks a little different.';
   $('#adoptName').value = 'Bort ' + ROMAN(store.graveyard.length + 1);
@@ -625,6 +705,51 @@ function openGraves(){
     return '<div class="grave'+(ran ? ' ran' : '')+'"><span class="rip">'+(ran ? 'RAN AWAY' : 'RIP')+'</span><span class="gn">'+nm+'</span><span class="ga">'+yrs(x.age)+'</span><span class="gd">'+shortDate(x.born)+' to '+shortDate(x.died)+'</span></div>';
   }).join('') : '<p class="empty">No graves yet. Keep '+PUP+' fed and it stays that way.</p>';
   openSheet('#graves');
+}
+/* ---------- collection ---------- */
+function allPups(){ return [store.pet].concat(store.graveyard || []); }
+function collected(){
+  const wear = new Set(), tricks = new Set(TRICKS), traits = new Set();
+  allPups().forEach(p => {
+    WEAR.forEach(w => { if(!w.rare && (p.age || 0) >= w.age) wear.add(w.id); });
+    (p.rare || []).forEach(id => wear.add(id)); (p.tricks || []).forEach(t => tricks.add(t));
+    const l = Object.assign({}, LOOK0, p.look); Object.keys(LOOKS).forEach(k => traits.add(k+':'+l[k]));
+  });
+  return {wear, tricks, traits};
+}
+// Draw a small pup with a given look/accessory into its own canvas; locked items are a solid silhouette.
+function miniPup(look, wear, locked){
+  const sv = {LW, LH, buf, bx:A.bx, bf:A.bf, look:store.pet.look, wear:store.pet.wear, hop:A.hopStart};
+  LW = 40; LH = 30; buf = new Uint8Array(LW*LH); mk.width = LW; mk.height = LH;
+  store.pet.look = look; store.pet.wear = wear; A.hopStart = -1e9;
+  try{ bort(LW*0.36, LH-2, {tongue:false}); }
+  finally{ store.pet.look = sv.look; store.pet.wear = sv.wear; A.hopStart = sv.hop; A.bx = sv.bx; A.bf = sv.bf; }
+  const b = buf, w = LW, h = LH;
+  if(locked){
+    const out = new Uint8Array(w*h), q = [];
+    for(let x=0;x<w;x++){ q.push(x, (h-1)*w+x); } for(let y=0;y<h;y++){ q.push(y*w, y*w+w-1); }
+    while(q.length){ const i = q.pop(); if(i < 0 || i >= w*h || out[i] || b[i]) continue; out[i] = 1; const x = i % w; if(x > 0) q.push(i-1); if(x < w-1) q.push(i+1); q.push(i-w, i+w); }
+    for(let i=0;i<w*h;i++) if(!out[i]) b[i] = 1;
+  }
+  LW = sv.LW; LH = sv.LH; buf = sv.buf; mk.width = LW; mk.height = LH;
+  const c = document.createElement('canvas'), Px = 4; c.width = w*Px; c.height = h*Px;
+  const g = c.getContext('2d'); g.fillStyle = C.lcd; g.fillRect(0,0,c.width,c.height);
+  g.fillStyle = locked ? 'rgba(37,48,27,.35)' : C.on;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(b[y*w+x]) g.fillRect(x*Px, y*Px, Px-1, Px-1);
+  return c.toDataURL();
+}
+function openCollection(){
+  const got = collected();
+  const tile = (img, name, sub, locked) => '<div class="tile'+(locked ? ' locked' : '')+'"><img alt="" src="'+img+'"><span>'+name+'</span><small>'+sub+'</small></div>';
+  $('#colWear').innerHTML = WEAR.map(w => { const ok = got.wear.has(w.id); return tile(miniPup(LOOK0, w.id, !ok), ok || !w.rare ? w.name : '???', ok ? 'Found' : w.rare ? 'Surprise only' : 'Age '+w.age, !ok); }).join('');
+  const allTricks = TRICKS.concat(RARE_TRICKS);
+  $('#colTricks').innerHTML = allTricks.map(t => { const ok = got.tricks.has(t); return '<span class="chip '+(ok ? 'on' : 'locked')+'">'+(ok ? t.replace('!','')+' ✓' : '??? · surprise')+'</span>'; }).join('');
+  const keys = Object.keys(TRAIT_NAMES);
+  $('#colLooks').innerHTML = keys.map(k => { const [t, v] = k.split(':'), ok = got.traits.has(k); const look = Object.assign({}, LOOK0, {[t]: t === 'size' ? parseFloat(v) : v});
+    return tile(miniPup(look, null, !ok), ok ? TRAIT_NAMES[k] : '???', ok ? 'Seen' : 'Future pup', !ok); }).join('');
+  const total = WEAR.length + allTricks.length + keys.length, have = got.wear.size + got.tricks.size + got.traits.size;
+  $('#colCount').textContent = have+' / '+total; $('#colFill').style.width = (have/total*100)+'%';
+  openSheet('#col');
 }
 const CFG = window.SITSTAY_CONFIG || null;
 const canPush = () => !!CFG && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -914,6 +1039,8 @@ function careLayer(now){
   const d = day();
   const hp = happiness(), hx = Math.round(LW/2 - 12);
   for(let i=0;i<4;i++) spr(i < hp ? SP.heart : SP.heartO, hx + i*6, 2);
+  // happy meter under the hearts: fills with focus time, dance when full
+  if(store.mode === 'playing'){ const f = Math.round(22*((d.focusMs % HAPPY)/HAPPY)); for(let x=0;x<=22;x++) if(x <= f || x % 2 === 0) px(hx + x, 8); }
   // meal icon, top left: bowl, full or empty with a blinking "!"
   spr(SP.bowl, 2, 4);
   if(!d.hungry){ hline(3,6,3); }
@@ -1057,15 +1184,32 @@ function drawButterfly(p){
 }
 function drawReturn(now){
   backdrop(0);
-  const rt = now - A.returnStart, wx = Math.round(LW*0.78);
+  const rt = now - A.returnStart, lvl = A.returnLevel || 1, wx = Math.round(LW*0.78);
   vline(wx, GY-30, GY-1); hline(wx, LW-1, GY-30);
   vline(wx+4, GY-18, GY-1); vline(wx+13, GY-18, GY-1); hline(wx+4, wx+13, GY-18); px(wx+11, GY-9);
-  if(rt < 1700) bort(wx - S(12), GY-1, {pose:'sit'});
+  const wag = Math.sin(now*0.07)*1.4; // tail going wild
+  if(rt < 700){ bort(wx - S(12), GY-1, {pose:'sit', wag, tongue:true}); spr(SP.ex, wx - S(12) + S(6), GY - S(36)); return; }
+  const k = rt - 700, u = clamp(k/Math.max(1, A.returnUntil - A.returnStart - 700));
+  const o = {wag, tongue:true};
+  let x, y = GY-1, face = -1;
+  if(lvl === 1){ x = wx - S(12); y = GY-1 - Math.round(Math.abs(Math.sin(k*0.012))*S(7)); o.tuck = true; }
   else {
-    const k = clamp((rt-1700)/1800), x = wx - S(10) - k*LW*0.25;
-    bort(x, GY-1 - Math.round(Math.abs(Math.sin(k*Math.PI*3))*6), {face:-1, tongue:true, tuck:true});
-    spr(SP.heart, x - 3, GY - S(38));
+    const laps = lvl === 2 ? 1 : 2, ph = u*laps*2*Math.PI, c = LW*0.45, R = LW*0.33;
+    x = c + Math.cos(ph)*R; face = Math.sin(ph) > 0 ? -1 : 1;
+    o.step = Math.floor(now/90) % 2 === 1; y = GY-1 - Math.round(Math.abs(Math.sin(now*0.016))*2);
   }
+  o.face = face; bort(x, y, o);
+  if(lvl === 3) for(let i=0;i<3;i++){ const hy = Math.round(GY - 12 - ((k*0.01 + i*10) % (GY-14))); spr(SP.heart, Math.round(LW*(0.2 + 0.6*hash(i+30))), hy); }
+  else spr(SP.heart, x - 2, GY - S(38));
+}
+SP.note = ["..##","..#.","..#.","###.","##.."];
+function drawDance(now){
+  backdrop(0);
+  const rt = now - A.danceStart, x = LW*0.5 + Math.round(Math.sin(rt*0.006)*S(6)), beat = Math.floor(rt/300);
+  for(let i=0;i<3;i++){ const ny = Math.round(GY - 16 - ((rt*0.01 + i*9) % (GY-20))); spr(SP.note, Math.round(LW*(0.15 + 0.7*hash(i+90))) + Math.round(Math.sin(rt*0.005+i)*2), ny); }
+  const o = {face: beat % 2 ? -1 : 1, wag: Math.sin(rt*0.05), tongue:true};
+  if(Math.floor(rt/600) % 2){ o.pose = 'sit'; o.paw = beat % 2 === 0; }
+  bort(x, GY-1 - (beat % 2 ? S(4) : 0), o);
 }
 function drawParty(now){
   backdrop(0);
@@ -1153,7 +1297,8 @@ function frame(){
   const fdt = lastFrame ? Math.min(now - lastFrame, 100) : 16; lastFrame = now;
   tick(now);
   const returning = now < A.returnUntil, partying = now < A.partyUntil, eating = now < A.eatUntil, pooping = now < A.poopUntil;
-  const paused = returning || partying || eating || pooping;
+  const dancing = now >= A.danceStart && now < A.danceUntil;
+  const paused = returning || partying || eating || pooping || dancing;
   A.cloud += fdt*0.0015;
   if(store.mode === 'playing' && !paused){ A.t += fdt; advance(fdt); }
   if(store.mode === 'playing' && !dimmed && !anySheetOpen() && now - lastTouch > DIM_AFTER && document.visibilityState === 'visible') setDim(true);
@@ -1167,6 +1312,7 @@ function frame(){
     else if(store.mode === 'playing'){
       if(returning) drawReturn(now);
       else if(partying) drawParty(now);
+      else if(dancing) drawDance(now);
       else if(pooping) drawPoop(now);
       else { A.caption = ''; const a = currentAct(), T = ACTS[a].T; ACTS[a].draw(A.t % T, Math.floor(A.t / T)); }
     } else if(store.mode === 'ended') drawKennel(now);
@@ -1204,7 +1350,8 @@ function render(){
   if(!store.pet.dead && fun >= RESTLESS*DAY && m !== 'playing'){ const left = Math.max(1, Math.ceil((RUNAWAY*DAY - fun)/DAY)); st = PUP+' is restless: no enrichment in '+Math.floor(fun/DAY)+' days. Finish one within '+left+(left === 1 ? ' day' : ' days')+' or '+PUP+' may run away.'; }
   if(store.pet.dead) st = store.pet.cause === 'ran' ? PUP+' ran away. Adopt a new puppy.' : PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
-  $('#brand').textContent = PUP.toUpperCase()+' · AGE '+store.pet.age;
+  const sk = streak();
+  $('#brand').textContent = PUP.toUpperCase()+' · AGE '+store.pet.age+(sk ? ' · 🔥 '+sk : '');
   syncPings();
   $('#statFocus').textContent = fmt(d.focusMs);
   const gm = store.goalMin*MIN; $('#goalFill').style.width = Math.min(100, d.focusMs/gm*100)+'%'; $('#goalBar').classList.toggle('met', d.focusMs >= gm); $('#goalText').textContent = 'Goal '+fmtGoal(store.goalMin);
@@ -1289,6 +1436,9 @@ function renderSettings(){
   $('#wearList').querySelectorAll('.wchip').forEach(b => b.addEventListener('click', () => { pt.wear = pt.wear === b.dataset.wear ? null : b.dataset.wear; save(); renderSettings(); dirty = true; }));
 }
 $('#gravesClose').addEventListener('click', () => closeSheet('#graves'));
+$('#openCol').addEventListener('click', openCollection);
+$('#colClose').addEventListener('click', () => closeSheet('#col'));
+$('#col').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#col'); });
 $('#graves').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#graves'); });
 $('#clean').addEventListener('click', clean);
 
@@ -1307,8 +1457,27 @@ function openSummary(){
   else if(ratio >= 0.75) verdict = 'Solid day with a few squirrels.';
   else if(ratio >= 0.5) verdict = 'Lots of squirrels today.';
   else verdict = 'The squirrels won today. Tomorrow is a new walk.';
-  $('#sumScore').textContent = score;
+  // count the score up
+  const t0 = Date.now(), countUp = () => { const k = Math.min(1, (Date.now()-t0)/1200), e = 1 - Math.pow(1-k, 3); $('#sumScore').textContent = Math.round(score*e); if(k < 1) setTimeout(countUp, 30); };
+  $('#sumScore').textContent = '0'; countUp();
   $('#sumVerdict').textContent = verdict;
+  // personal best
+  const tk = todayKey(); store.best = store.best || {score:0, key:null, prev:0};
+  if(focusMin >= 1 && score > store.best.score){ if(store.best.key !== tk) store.best = {score, key:tk, prev:store.best.score}; else store.best.score = score; save(); }
+  const isNew = store.best.key === tk && store.best.prev > 0;
+  store.prevBest = store.best.prev;
+  const bEl = $('#sumBest'); bEl.classList.remove('new');
+  if(isNew){ bEl.textContent = 'New personal best! Old best: '+store.prevBest; setTimeout(() => { bEl.classList.add('new'); beep(SFX.best); }, 1250); }
+  else bEl.textContent = store.best && store.best.score ? 'Personal best: '+store.best.score : '';
+  // streak + dog years
+  const sk = streak(), pt = store.pet, next = WEAR.find(w => !w.rare && w.age > pt.age);
+  const ageLine = next ? next.name+' at age '+next.age+' ('+(next.age - pt.age)+' more full '+(next.age - pt.age === 1 ? 'day' : 'days')+')' : 'Everything unlocked';
+  $('#sumStreak').innerHTML = '<dt>Streak</dt><dd'+(sk ? ' class="ok">🔥 '+sk+(sk === 1 ? ' day' : ' days') : '>Finish all 3 to start one')+'</dd>'+
+    '<dt>Streak savers</dt><dd>'+(store.savers || 0)+' of '+MAX_SAVERS+'</dd>'+
+    '<dt>Next saver</dt><dd>'+(sk % 7 ? (7 - sk % 7)+' more full '+(7 - sk % 7 === 1 ? 'day' : 'days') : sk ? 'Earned today' : '7 full days')+'</dd>'+
+    '<dt>'+pt.name+'</dt><dd>'+yrs(pt.age)+'</dd><dt>Next unlock</dt><dd>'+ageLine+'</dd>';
+  const tm = new Date(); tm.setDate(tm.getDate()+1);
+  $('#sumTomorrow').innerHTML = pick3(keyOf(tm)).map(a => '<span class="chip">'+ACTS[a].name+'</span>').join('');
   const rows = [['Focus time', fmt(d.focusMs)], ['Daily goal ('+fmtGoal(store.goalMin)+')', goalMet ? 'Met' : 'Not yet'], ['Focus sessions', d.sessions || 0], ['Longest stretch', fmt(d.longestMs)], ['Times away', d.leaves], ['Time away', fmt(d.awayMs)]];
   $('#sumRows').innerHTML = rows.map(r => '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('');
   $('#sumActs').innerHTML = d.acts.map(a => {
@@ -1331,6 +1500,7 @@ $('#summary').addEventListener('click', e => { if(e.target === e.currentTarget) 
 
 /* ---------- boot ---------- */
 readColors(); resize();
+settleStreak();
 if(store.day && store.day !== todayKey()) rollover();
 else if(store.mode === 'free' && Date.now() >= store.freeStart + FREE) endFree(Date.now(), true);
 else if(store.mode === 'playing'){
