@@ -54,6 +54,14 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
   background:linear-gradient(160deg,var(--shell-hi),var(--shell) 45%,var(--shell-lo));box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 6px 16px rgba(60,20,100,.18)}
 .lcd{position:relative;flex:1 1 auto;border-radius:12px;overflow:hidden;background:var(--lcd);box-shadow:inset 0 3px 8px rgba(0,0,0,.28)}
 .lcd canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.burst{position:absolute;left:50%;top:3%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px;border-radius:10px;
+  background:var(--lcd);border:3px solid var(--lcd-on);color:var(--lcd-on);font-family:var(--font-display);text-align:center;pointer-events:none;max-width:88%}
+.burst b{font-size:1.7rem;line-height:1;font-variant-numeric:tabular-nums}
+.burst span{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase}
+.burst small{font-size:.72rem;margin-top:4px;font-family:var(--font-body);font-weight:800}
+.burst.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{0%{transform:translateX(-50%) scale(.3);opacity:0}100%{transform:translateX(-50%) scale(1);opacity:1}}
+body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
 .brand{font-family:var(--font-display);font-weight:700;color:rgba(255,255,255,.85);font-size:.8rem;letter-spacing:.06em;text-align:center;margin-top:6px}
 .toast{position:absolute;left:8px;right:8px;bottom:8px;background:var(--lcd-on);color:var(--lcd);font-family:var(--font-display);font-size:.78rem;text-align:center;padding:8px 10px;border-radius:8px}
 .status{font-weight:800;font-size:.9rem;text-align:center;margin:0;min-height:1.3em}
@@ -151,6 +159,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <div class="lcd" id="lcd">
       <canvas id="scene" aria-label="Bort the pixel puppy"></canvas>
       <div class="toast" id="toast" hidden></div>
+      <div class="burst" id="burst" hidden><b id="burstN">+0</b><span id="burstL">Good dog points</span><small id="burstS" hidden></small></div>
     </div>
     <div class="brand" id="brand">BORT</div>
   </div>
@@ -226,6 +235,8 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <p class="sub">Reminders</p>
     <p class="note" id="pushNote"></p>
     <button class="btn" id="pushBtn">Turn on reminders</button>
+    <p class="sub">Sound</p>
+    <button class="btn" id="soundBtn">Sound: on</button>
     <p class="sub">Accessories</p>
     <p class="note">Bort unlocks one at each dog-year milestone. Tap to wear it, tap again to take it off.</p>
     <div class="wear" id="wearList"></div>
@@ -255,7 +266,11 @@ const KEY = 'sitstay.v1';
 let PUP = 'Bort';
 const DAY = 86400000;
 const FREE = 15 * 60000;
-const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat', age:3}, {id:'shades', name:'Sunglasses', age:5}, {id:'crown', name:'Crown', age:10}, {id:'tophat', name:'Top hat', age:25}];
+const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat', age:3}, {id:'shades', name:'Sunglasses', age:5}, {id:'crown', name:'Crown', age:10}, {id:'tophat', name:'Top hat', age:25},
+  {id:'bowtie', name:'Bow tie', rare:true}, {id:'flower', name:'Flower', rare:true}, {id:'halo', name:'Halo', rare:true}];
+const RARE_TRICKS = ['Moonwalk!','Bow!','Wave!'];
+const FINDS = ['a sock. It is his now.', 'a tennis ball older than he is.', 'half a sandwich. No questions.', 'a stick of incredible quality.', 'a squeaky duck.', 'a very important leaf.'];
+const SURPRISE_ODDS = 0.2; // 1 in 5 finished activities
 const GRACE = 10000;
 const GOAL = 30 * 60000;
 const MIN = 60000;
@@ -378,7 +393,7 @@ document.addEventListener('pointerdown', () => { if(store.mode === 'playing') re
 setInterval(() => { if(store.mode === 'playing' && document.visibilityState === 'visible' && (!wake || (awakeVid && awakeVid.paused))) requestWake(); }, 20000);
 
 /* ---------- focus + care logic ---------- */
-const A = {t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
+const A = {hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
 
 function rollover(){
   if(store.day && store.day !== todayKey()){
@@ -394,6 +409,74 @@ function registerAway(away, now){
   showToast(PUP+' waited by the door for '+(away < MIN ? Math.round(away/1000)+' sec' : fmt(away))+(lost ? '. Activity minutes start over.' : ''));
   save();
 }
+/* ---------- rewards: sound, burst overlay, surprises, milestones ---------- */
+const PARTY = 5200;
+let actx = null;
+function audio(){
+  if(store.sound === false) return null;
+  try{ if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if(actx.state === 'suspended') actx.resume(); }catch(e){ return null; }
+  return actx;
+}
+// iPhone only allows sound after a tap, so unlock audio on the first touch.
+document.addEventListener('pointerdown', () => { if(store.sound !== false) audio(); }, {passive:true});
+const SFX = {
+  win: [[523,.09],[659,.09],[784,.09],[1047,.2],[0,.06],[784,.09],[1047,.4]],
+  surprise: [[1319,.07],[1568,.07],[2093,.07],[2637,.22]],
+  tick: [[880,.07],[1175,.13]]
+};
+function beep(notes){
+  const c = audio(); if(!c) return;
+  let t = c.currentTime + 0.02;
+  notes.forEach(([f, d]) => {
+    if(f){ const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d*0.95);
+      o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + d); }
+    t += d;
+  });
+}
+const buzz = pat => { try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){} };
+let burstTimers = [];
+function showBurst(big, label, ms, countTo){
+  burstTimers.forEach(clearTimeout); burstTimers = [];
+  const el = $('#burst'), n = $('#burstN');
+  $('#burstL').textContent = label; $('#burstS').hidden = true;
+  el.hidden = false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  if(countTo){ const t0 = Date.now(); const step = () => { const k = Math.min(1, (Date.now()-t0)/900); n.textContent = '+'+Math.round(countTo*k); if(k < 1) burstTimers.push(setTimeout(step, 40)); }; step(); }
+  else n.textContent = big;
+  burstTimers.push(setTimeout(() => { el.hidden = true; }, ms));
+}
+function burstNote(text, ms){
+  burstTimers.forEach(clearTimeout); burstTimers = [];
+  const el = $('#burst'), sm = $('#burstS');
+  sm.textContent = text; sm.hidden = false; el.hidden = false; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  burstTimers.push(setTimeout(() => { el.hidden = true; }, ms));
+}
+function rollSurprise(){
+  if(Math.random() >= SURPRISE_ODDS) return null;
+  const pt = store.pet; pt.rare = pt.rare || []; pt.tricks = pt.tricks || [];
+  const pool = [{kind:'find'}];
+  WEAR.forEach(w => { if(w.rare && !pt.rare.includes(w.id)) pool.push({kind:'wear', w}); });
+  RARE_TRICKS.forEach(t => { if(!pt.tricks.includes(t)) pool.push({kind:'trick', t}); });
+  const s = pool[Math.floor(Math.random()*pool.length)];
+  if(s.kind === 'wear'){ pt.rare.push(s.w.id); return {line:'Surprise! '+PUP+' found a '+s.w.name.toLowerCase()+'.', toast:'New accessory: '+s.w.name+'. Put it on in Settings.'}; }
+  if(s.kind === 'trick'){ pt.tricks.push(s.t); return {line:'Surprise! '+PUP+' learned '+s.t.replace('!','')+'.', toast:'New trick unlocked. Watch for it in Trick training.'}; }
+  return {line:'Surprise! '+PUP+' dug up '+FINDS[Math.floor(Math.random()*FINDS.length)], toast:''};
+}
+function celebrate(a, left){
+  beep(SFX.win); buzz([90,50,90,50,260]);
+  showBurst('', left ? 'Good dog points' : 'All 3 done!', PARTY - 400, 20);
+  const sur = rollSurprise();
+  if(sur){
+    setTimeout(() => { beep(SFX.surprise); buzz([40,30,40]); burstNote(sur.line, 3600); }, 1900);
+    A.partyUntil += 1800;
+  }
+  setTimeout(() => showToast(sur && sur.toast ? sur.toast : left ? PUP+' finished '+ACTS[a].name+'. Pick the next one.' : 'All three done. '+PUP+' is one happy pup.'), sur ? 5600 : 1200);
+}
+function milestone(m, now){
+  A.hopStart = now; A.sparkUntil = now + 1600;
+  beep(SFX.tick); buzz(40);
+  showBurst(m+' min', (30-m)+' to go', 1700);
+}
 function tick(now){
   rollover();
   checkDeath(now);
@@ -408,7 +491,9 @@ function tick(now){
     if(dt > GRACE) registerAway(dt, now);
     else {
       d.focusMs += dt; d.streakMs += dt; if(d.streakMs > d.longestMs) d.longestMs = d.streakMs;
-      d.actMs[a] = (d.actMs[a] || 0) + dt;
+      const before = d.actMs[a] || 0;
+      d.actMs[a] = before + dt;
+      if(!d.done[a]) [10,20,25].forEach(mm => { if(before < mm*MIN && d.actMs[a] >= mm*MIN) milestone(mm, now); });
       if(d.hungry) d.unfedMs += dt;
       if(!d.goalMet && d.focusMs >= store.goalMin*MIN){ d.goalMet = true; showToast('Daily goal met: '+fmt(d.focusMs)+' of focus.'); save(); }
       if(d.focusMs >= d.nextPoop){
@@ -416,12 +501,11 @@ function tick(now){
         if(d.poops < 3){ d.poops++; A.poopStart = now; A.poopUntil = now + 1800; showToast(PUP+' pooped. Clean it up when this activity is done.'); save(); }
       }
       if(!d.done[a] && d.actMs[a] >= GOAL){
-        d.done[a] = true; store.pet.lastEnriched = now; A.partyStart = now; A.partyUntil = now + 3200;
+        d.done[a] = true; store.pet.lastEnriched = now; A.partyStart = now; A.partyUntil = now + PARTY;
         const left = d.acts.filter(x => !d.done[x]).length;
-        showToast(left ? PUP+' finished '+ACTS[a].name+'. Pick the next one.' : 'All three done. '+PUP+' is one happy pup.');
-        // If the screen is dimmed, brighten for a few seconds so you see it, then dim again.
-        if(dimmed){ setDim(false); lastTouch = now - DIM_AFTER + 4000; }
-        try{ if(navigator.vibrate) navigator.vibrate([120, 80, 120]); }catch(e){}
+        // If the screen is dimmed, brighten long enough to see the whole celebration, then dim again.
+        if(dimmed){ setDim(false); lastTouch = now - DIM_AFTER + PARTY + 3000; }
+        celebrate(a, left);
         save();
       }
     }
@@ -758,11 +842,17 @@ function bortFace(o, head){
   else if(wear === 'shades'){ g.fillRect(0,-7,12,6); g.lineWidth = 2; g.beginPath(); g.moveTo(0,-5); g.lineTo(-9,-3); g.stroke(); }
   else if(wear === 'crown') poly([-13,-12, -1,-14, 0,-23, -3,-18, -6,-24, -9,-18, -13,-22]);
   else if(wear === 'tophat'){ g.fillRect(-14,-16,15,3); g.fillRect(-11,-30,9,15); }
+  else if(wear === 'bowtie'){ poly([-13,10, -6,15, -13,20]); poly([1,10, -6,15, 1,20]); }
+  else if(wear === 'flower'){ for(const [fx,fy] of [[-10,-19],[-6,-15],[-14,-15],[-10,-11]]){ g.beginPath(); g.arc(fx,fy,2.6,0,Math.PI*2); g.fill(); } }
+  else if(wear === 'halo'){ g.lineWidth = 2.6; g.beginPath(); g.ellipse(-4,-38,10,2.8,0,0,Math.PI*2); g.stroke(); }
   g.restore();
   return eye;
 }
 function bort(cx, foot, o){
   o = o || {};
+  const hk = (Date.now() - A.hopStart) / 700;
+  if(hk >= 0 && hk < 1) foot -= Math.round(Math.sin(hk*Math.PI)*S(9));
+  A.bx = cx; A.bf = foot;
   const g = mctx;
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH); g.fillStyle = '#000'; g.strokeStyle = '#000';
   bortBase(cx, foot, o); const info = bortShape(o);
@@ -802,6 +892,22 @@ function backdrop(scroll){
     const x = Math.round(j*tsp - scroll + hash(j)*4), y = GY + 3 + Math.floor(hash(j+3)*(LH-GY-5));
     if(y < LH-1 && hash(j+9) > 0.4){ px(x,y); px(x+1,y-1); px(x+2,y); }
   }
+}
+SP.spark = [".#.","###",".#."];
+SP.spark2 = ["#.#",".#.","#.#"];
+function progressLayer(){
+  if(store.mode !== 'playing') return;
+  const d = day(), a = currentAct(); if(d.done[a]) return;
+  const k = clamp((d.actMs[a] || 0)/GOAL), y = LH - 3, x0 = 3, x1 = LW - 4;
+  for(let yy=y-3; yy<=y+1; yy++) for(let x=x0-1; x<=x1+1; x++) off(x, yy);
+  hline(x0, x1, y-1); hline(x0, x1, y+1); px(x0-1, y); px(x1+1, y);
+  hline(x0, Math.round(x0 + (x1-x0)*k), y);
+  for(const m of [10,20,25]) px(Math.round(x0 + (x1-x0)*m/30), y-2);
+}
+function sparkleLayer(now){
+  if(now >= A.sparkUntil) return;
+  const cy = A.bf - S(16), r = S(14) + Math.floor((A.sparkUntil - now)/400);
+  for(let i=0;i<4;i++){ const ang = i*Math.PI/2 + now*0.004; spr(Math.floor(now/150 + i) % 2 ? SP.spark : SP.spark2, A.bx + Math.cos(ang)*r - 1, cy + Math.sin(ang)*r*0.6 - 1); }
 }
 function happiness(){ const d = day(); let h = 4; if(d.hungry) h--; h -= Math.min(2, d.poops); if(d.leaves >= 3) h--; return Math.max(0, h); }
 function careLayer(now){
@@ -851,7 +957,8 @@ function drawFetch(p){
 }
 function drawTricks(p, cyc){
   backdrop(0);
-  const T = ACTS.tricks.T, u = p/T, name = TRICKS[cyc % TRICKS.length], x = LW*0.5;
+  const list = TRICKS.concat(store.pet.tricks || []), T = ACTS.tricks.T, u = p/T, name = list[cyc % list.length];
+  let x = LW*0.5;
   const doing = u > 0.12 && u < 0.88, k = clamp((u-0.12)/0.76);
   let o = {tongue:true}, y = GY-1;
   if(doing){
@@ -864,6 +971,9 @@ function drawTricks(p, cyc){
       case 'Jump!': y = GY-1 - Math.round(Math.sin(k*Math.PI)*10); o.tuck = true; break;
       case 'Shake!': o.pose = 'sit'; o.paw = Math.floor(k*10) % 2 === 0; break;
       case 'Play dead!': o.pose = 'lie'; o.flipV = k > 0.15; o.sleep = k > 0.15; o.tongue = false; break;
+      case 'Moonwalk!': x = LW*0.5 - Math.sin(k*Math.PI*2)*LW*0.2; o.step = Math.floor(A.t/220) % 2 === 1; break;
+      case 'Bow!': o.down = k > 0.15 && k < 0.85; break;
+      case 'Wave!': o.pose = 'sit'; o.paw = Math.floor(k*14) % 2 === 0; break;
     }
   } else A.caption = '';
   bort(x, y, o);
@@ -959,9 +1069,21 @@ function drawReturn(now){
 }
 function drawParty(now){
   backdrop(0);
-  const rt = now - A.partyStart, x = LW*0.5;
+  const rt = now - A.partyStart, c = LW*0.5;
   for(let i=0;i<4;i++){ const hy = Math.round(GY - 10 - ((rt*0.012 + i*9) % (GY-12))); spr(SP.heart, Math.round(LW*(0.15 + 0.7*hash(i+5))), hy); }
-  bort(x, GY-1 - Math.round(Math.abs(Math.sin(rt*0.006))*9), {face:Math.floor(rt/400) % 2 ? -1 : 1, tuck:true, tongue:true});
+  // confetti
+  for(let i=0;i<14;i++){ const fx = Math.round(LW*hash(i+40) + Math.sin(rt*0.004 + i)*2), fy = Math.round((rt*0.02*(0.6 + hash(i+60)) + hash(i+80)*LH) % GY); if(fy < GY-1){ px(fx,fy); if(i % 3 === 0) px(fx+1,fy); } }
+  let x = c, face = 1, y = GY-1;
+  const o = {tongue:true};
+  if(rt < 700){ y = GY-1 - Math.round(Math.abs(Math.sin(rt*0.009))*S(9)); o.tuck = true; }
+  else if(rt < 3700){
+    // victory lap: out to the right, across to the left, back to center
+    const k = (rt-700)/3000, R = LW*0.36;
+    x = c + Math.sin(k*Math.PI*2)*R; face = Math.cos(k*Math.PI*2) >= 0 ? 1 : -1;
+    o.step = Math.floor(rt/110) % 2 === 1; y = GY-1 - Math.round(Math.abs(Math.sin(rt*0.014))*2);
+  } else { y = GY-1 - Math.round(Math.abs(Math.sin(rt*0.006))*S(9)); face = Math.floor(rt/300) % 2 ? -1 : 1; o.tuck = true; }
+  o.face = face;
+  bort(x, y, o);
 }
 function drawEat(now){
   backdrop(0);
@@ -1050,7 +1172,8 @@ function frame(){
     } else if(store.mode === 'ended') drawKennel(now);
     else if(store.mode === 'free') drawSleep(now);
     else drawSleep(now);
-    if(!store.pet.dead) careLayer(now);
+    if(!store.pet.dead){ careLayer(now); progressLayer(); sparkleLayer(now); }
+    if(partying && now - A.partyStart < 600 && Math.floor((now - A.partyStart)/100) % 2 === 0) for(let i=0;i<buf.length;i++) buf[i] ^= 1;
     present();
   }
   if(now - lastUI > 250){ lastUI = now; render(); }
@@ -1123,6 +1246,7 @@ $('#openSettings').addEventListener('click', () => { renderSettings(); openSheet
 $('#setDone').addEventListener('click', () => closeSheet('#settings'));
 $('#settings').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#settings'); });
 $('#pushBtn').addEventListener('click', enablePush);
+$('#soundBtn').addEventListener('click', () => { store.sound = store.sound === false; save(); renderSettings(); if(store.sound) beep(SFX.tick); });
 $('#goalInput').addEventListener('change', e => { const h = parseFloat(e.target.value); if(h >= 0.5 && h <= 12){ store.goalMin = Math.round(h*60); save(); render(); } else e.target.value = store.goalMin/60; });
 $('#copyCode').addEventListener('click', () => {
   const code = store.backupId;
@@ -1152,14 +1276,15 @@ $('#restoreBtn').addEventListener('click', async () => {
 function renderSettings(){
   const cfg = window.SITSTAY_CONFIG, pushOk = !!cfg && 'serviceWorker' in navigator && 'PushManager' in window;
   $('#goalInput').value = store.goalMin/60;
+  $('#soundBtn').textContent = store.sound === false ? 'Sound: off' : 'Sound: on';
   $('#pushNote').textContent = !pushOk ? 'Reminders work in the SitStay app on your Home Screen.' : store.push ? 'On. You will get pings for lunch, if '+PUP+' goes 2 days without food, when you leave mid-session, and when a free break ends.' : 'Get a ping for lunch, if '+PUP+' goes hungry too long, when you leave mid-session, and when a free break ends.';
   $('#pushBtn').hidden = !pushOk || !!store.push;
   $('#backupNote').textContent = cfg ? 'Your pup, graveyard and history back up automatically'+(store.lastBackup ? ' (last backup '+new Date(store.lastBackup).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+')' : '')+'. Save this code somewhere safe, like Notes, to restore on a new phone.' : 'Backup works in the SitStay app on your Home Screen.';
   $('#backupCode').textContent = store.backupId;
   const pt = store.pet;
   $('#wearList').innerHTML = WEAR.map(w => {
-    const ok = pt.age >= w.age;
-    return '<button class="wchip" data-wear="'+w.id+'" aria-pressed="'+(pt.wear === w.id)+'"'+(ok ? '' : ' disabled')+'>'+w.name+'<small>'+(ok ? (pt.wear === w.id ? 'Wearing' : 'Unlocked') : 'Age '+w.age)+'</small></button>';
+    const ok = w.rare ? (pt.rare || []).includes(w.id) : pt.age >= w.age;
+    return '<button class="wchip" data-wear="'+w.id+'" aria-pressed="'+(pt.wear === w.id)+'"'+(ok ? '' : ' disabled')+'>'+(ok || !w.rare ? w.name : '???')+'<small>'+(ok ? (pt.wear === w.id ? 'Wearing' : w.rare ? 'Surprise find' : 'Unlocked') : w.rare ? 'Surprise only' : 'Age '+w.age)+'</small></button>';
   }).join('');
   $('#wearList').querySelectorAll('.wchip').forEach(b => b.addEventListener('click', () => { pt.wear = pt.wear === b.dataset.wear ? null : b.dataset.wear; save(); renderSettings(); dirty = true; }));
 }
