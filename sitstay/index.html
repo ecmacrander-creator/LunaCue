@@ -113,6 +113,7 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
 .link{font-family:var(--font-display);font-size:.72rem;background:none;border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 10px;cursor:pointer}
 .graves{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
 .grave{background:var(--bg);border:2px solid var(--line);border-radius:60px 60px 8px 8px;padding:22px 12px 14px;text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0}
+.grave.ran{border-style:dashed;border-radius:8px}
 .grave .rip{font-family:var(--font-display);font-size:.7rem;color:var(--muted)}
 .grave .gn{font-family:var(--font-display);font-size:1rem;overflow-wrap:anywhere}
 .grave .ga{font-weight:800}
@@ -128,7 +129,7 @@ body.dim .lcd{background:#000;box-shadow:none}
 body.dim .brand{color:#22381a}
 body.dim .toast{background:#0c1708;color:#5d8a48}
 .dimclock{display:none}
-body.dim .dimclock{display:block;text-align:center;font-family:var(--font-display);color:#3E6B2B;margin-top:10px;font-variant-numeric:tabular-nums}
+body.dim .dimclock{display:block;position:fixed;left:0;right:0;bottom:calc(36px + env(safe-area-inset-bottom,0px));text-align:center;font-family:var(--font-display);color:#3E6B2B;font-variant-numeric:tabular-nums;pointer-events:none;transition:transform 2s ease}
 body.dim .dimclock b{display:block;font-size:2.2rem;line-height:1;font-weight:700}
 body.dim .dimclock small{display:block;font-size:.72rem;color:#2c4a1f;margin-top:6px;letter-spacing:.04em}
 body.dim .dimclock #dimAct{color:#3E6B2B;margin-top:10px}
@@ -152,7 +153,6 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <div class="toast" id="toast" hidden></div>
     </div>
     <div class="brand" id="brand">BORT</div>
-    <div class="dimclock" id="dimClock" aria-live="off"><b id="dimStretch">0:00</b><small id="dimToday">this stretch · 0m today</small><small id="dimAct"></small></div>
   </div>
   <p class="status" id="status"></p>
 
@@ -175,6 +175,8 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <button class="btn" id="secondary" disabled>End day</button>
   </div>
 </div>
+
+<div class="dimclock" id="dimClock" aria-live="off"><b id="dimStretch">0:00</b><small id="dimToday">this stretch · 0m today</small><small id="dimAct"></small></div>
 
 <div class="sheet" id="summary" hidden>
   <div class="card" role="dialog" aria-labelledby="sumTitle">
@@ -257,6 +259,21 @@ const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat'
 const GRACE = 10000;
 const GOAL = 30 * 60000;
 const MIN = 60000;
+const RUNAWAY = 5;   // days without finishing an enrichment activity before the pup runs away
+const RESTLESS = 3;  // days before the warning starts
+/* Each new pup gets a slightly different look: 2-3 traits change from the last pup. */
+const LOOK0 = {ears:'up', tail:'curl', mark:'none', snout:'short', size:1};
+const LOOKS = {ears:['up','fold','one'], tail:['curl','straight','stub'], mark:['none','saddle','eyepatch'], snout:['short','long'], size:[0.9,1,1.12]};
+function newLook(prev){
+  prev = Object.assign({}, LOOK0, prev || {});
+  for(let i=0;i<60;i++){
+    const l = {}; for(const k in LOOKS){ const o = LOOKS[k]; l[k] = o[Math.floor(Math.random()*o.length)]; }
+    const diff = Object.keys(LOOKS).filter(k => l[k] !== prev[k]).length;
+    if(diff >= 2 && diff <= 3) return l;
+  }
+  return Object.assign({}, prev, {ears: prev.ears === 'up' ? 'fold' : 'up', mark: prev.mark === 'none' ? 'saddle' : 'none'});
+}
+const ROMAN = n => { const v = [[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]; let r = ''; for(const [k,c] of v) while(n >= k){ r += c; n -= k; } return r; };
 
 /* ---------- the 10 enrichment activities ---------- */
 const ACTS = {
@@ -284,13 +301,21 @@ function pick3(key){
 const between = (a,b) => (a + Math.random()*(b-a)) * MIN;
 
 /* ---------- storage ---------- */
-function newPet(name){ const now = Date.now(); return {name:name, born:now, age:0, lastAgedKey:null, lastFed:now, vetLeft:3, dead:false, diedAt:0}; }
+function newPet(name, look){ const now = Date.now(); return {name:name, born:now, age:0, lastAgedKey:null, lastFed:now, lastEnriched:now, vetLeft:3, dead:false, diedAt:0, look:look || LOOK0}; }
 function newId(){ try{ return crypto.randomUUID(); }catch(e){ return 'x'.repeat(8).replace(/x/g, () => Math.random().toString(36).slice(2,6)); } }
 function blank(){ return {days:{}, mode:'idle', day:null, lastTick:0, hiddenAt:0, activity:null, pet:newPet('Bort'), graveyard:[], goalMin:240, freeStart:0, backupId:newId(), lastBackup:0}; }
 function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.days) return Object.assign(blank(), s); }catch(e){} return blank(); }
 let store = load();
 if(!store.backupId) store.backupId = newId();
 if(!store.goalMin) store.goalMin = 240;
+// Pups from before looks existed: the first Bort keeps the classic look, later pups get a variation.
+if(!store.pet.look) store.pet.look = store.graveyard.length ? newLook(LOOK0) : LOOK0;
+// Pups from before the run-away rule: start from the last finished activity, but never less than 3 days of runway.
+if(!store.pet.lastEnriched){
+  let t = store.pet.born || Date.now();
+  Object.keys(store.days).forEach(k => { const d = store.days[k]; if(d.done && Object.values(d.done).some(Boolean)){ const e = new Date(k+'T23:59:59').getTime(); if(e > t) t = e; } });
+  store.pet.lastEnriched = Math.max(Math.min(t, Date.now()), Date.now() - 2*DAY);
+}
 PUP = store.pet.name;
 let cloudT = 0;
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} if(window.SITSTAY_CONFIG){ clearTimeout(cloudT); cloudT = setTimeout(() => cloudSave(false), 15000); } }
@@ -391,7 +416,7 @@ function tick(now){
         if(d.poops < 3){ d.poops++; A.poopStart = now; A.poopUntil = now + 1800; showToast(PUP+' pooped. Clean it up when this activity is done.'); save(); }
       }
       if(!d.done[a] && d.actMs[a] >= GOAL){
-        d.done[a] = true; A.partyStart = now; A.partyUntil = now + 3200;
+        d.done[a] = true; store.pet.lastEnriched = now; A.partyStart = now; A.partyUntil = now + 3200;
         const left = d.acts.filter(x => !d.done[x]).length;
         showToast(left ? PUP+' finished '+ACTS[a].name+'. Pick the next one.' : 'All three done. '+PUP+' is one happy pup.');
         // If the screen is dimmed, brighten for a few seconds so you see it, then dim again.
@@ -427,6 +452,7 @@ function startDay(){
   if(store.pet.dead){ openDead(); return; }
   const d = day(); store.day = todayKey(); store.mode = 'playing';
   if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; showToast(PUP+' wants breakfast. Tap Feed.'); }
+  else if(sinceFun(Date.now()) >= RESTLESS*DAY) showToast(PUP+' is restless. Finish an activity today.');
   d.sessions = (d.sessions || 0) + 1;
   d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
 }
@@ -460,15 +486,26 @@ function dayComplete(d){ return !!d && d.acts.every(a => d.done[a]); }
 function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key || !dayComplete(store.days[key])) return; pt.age++; pt.lastAgedKey = key; const w = WEAR.find(x => x.age === pt.age); if(w) setTimeout(() => showToast(pt.name+' unlocked the '+w.name+'. Put it on in Settings.'), 4800); save(); }
 const yrs = n => n + (n === 1 ? ' dog year' : ' dog years');
 const shortDate = t => new Date(t).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
+const sinceFun = now => Math.max(0, now - (store.pet.lastEnriched || now));
 function checkDeath(now){
   const pt = store.pet;
-  if(pt.dead || now - pt.lastFed <= 3*DAY) return;
-  pt.dead = true; pt.diedAt = pt.lastFed + 3*DAY;
+  if(pt.dead) return;
+  const starveAt = pt.lastFed + 3*DAY, runAt = (pt.lastEnriched || now) + RUNAWAY*DAY;
+  if(now <= starveAt && now <= runAt) return;
+  pt.dead = true;
+  if(now > starveAt && starveAt <= runAt){ pt.cause = 'starved'; pt.diedAt = starveAt; } else { pt.cause = 'ran'; pt.diedAt = runAt; }
   if(store.mode === 'playing' || store.mode === 'break' || store.mode === 'free'){ const d = day(); d.ended = true; d.streakMs = 0; }
   store.mode = 'idle'; releaseWake(); save(); render(); openDead();
 }
 function openDead(){
   const pt = store.pet;
+  if(pt.cause === 'ran'){
+    $('#deadTitle').textContent = pt.name+' ran away';
+    $('#deadText').textContent = pt.name+' went '+RUNAWAY+' days without an enrichment activity and slipped out the gate to find some fun. '+pt.name+' was '+yrs(pt.age)+' old.';
+    $('#vet').hidden = true; $('#rest').textContent = 'Adopt a new puppy';
+    closeSheet('#summary'); openSheet('#dead'); return;
+  }
+  $('#rest').textContent = 'Lay to rest';
   $('#deadTitle').textContent = pt.name+' has died';
   $('#deadText').textContent = pt.name+' went more than 3 days without food. '+pt.name+' was '+yrs(pt.age)+' old. '+
     (pt.vetLeft ? 'You have '+pt.vetLeft+' emergency vet '+(pt.vetLeft === 1 ? 'visit' : 'visits')+' left.' : 'There are no emergency vet visits left.');
@@ -477,29 +514,31 @@ function openDead(){
   closeSheet('#summary'); openSheet('#dead');
 }
 function vet(){
-  const pt = store.pet; if(!pt.dead || !pt.vetLeft) return;
-  pt.vetLeft--; pt.dead = false; pt.diedAt = 0; pt.lastFed = Date.now();
+  const pt = store.pet; if(!pt.dead || !pt.vetLeft || pt.cause === 'ran') return;
+  pt.vetLeft--; pt.dead = false; pt.diedAt = 0; pt.cause = null; pt.lastFed = Date.now();
   save(); closeSheet('#dead'); render();
   showToast('The vet saved '+pt.name+'. '+(pt.vetLeft ? pt.vetLeft+' emergency '+(pt.vetLeft === 1 ? 'visit' : 'visits')+' left.' : 'That was the last emergency visit.'));
 }
 function layToRest(){
   const pt = store.pet;
-  store.graveyard.push({name:pt.name, age:pt.age, born:pt.born, died:pt.diedAt || Date.now()});
+  store.graveyard.push({name:pt.name, age:pt.age, born:pt.born, died:pt.diedAt || Date.now(), cause:pt.cause || 'starved', look:pt.look || LOOK0});
   save(); closeSheet('#dead');
-  $('#adoptText').textContent = pt.name+' is resting in the graveyard. A new puppy is waiting for a home.';
-  $('#adoptName').value = pt.name === 'Bort' ? 'Bort II' : 'Bort';
+  $('#adoptText').textContent = pt.cause === 'ran' ? pt.name+' is out there somewhere chasing squirrels. A new puppy is waiting for a home. Each pup looks a little different.' : pt.name+' is resting in the graveyard. A new puppy is waiting for a home. Each pup looks a little different.';
+  $('#adoptName').value = 'Bort ' + ROMAN(store.graveyard.length + 1);
   openSheet('#adopt');
 }
 function adopt(){
   const nm = ($('#adoptName').value || '').trim().slice(0,16) || 'Bort';
-  store.pet = newPet(nm); PUP = nm; save(); closeSheet('#adopt'); render();
+  const last = store.graveyard[store.graveyard.length - 1];
+  store.pet = newPet(nm, newLook(last && last.look)); PUP = nm; save(); closeSheet('#adopt'); render();
   showToast('Welcome home, '+nm+'.');
 }
 function openGraves(){
   const g = store.graveyard;
   $('#graveList').innerHTML = g.length ? g.slice().reverse().map(x => {
     const nm = String(x.name).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-    return '<div class="grave"><span class="rip">RIP</span><span class="gn">'+nm+'</span><span class="ga">'+yrs(x.age)+'</span><span class="gd">'+shortDate(x.born)+' to '+shortDate(x.died)+'</span></div>';
+    const ran = x.cause === 'ran';
+    return '<div class="grave'+(ran ? ' ran' : '')+'"><span class="rip">'+(ran ? 'RAN AWAY' : 'RIP')+'</span><span class="gn">'+nm+'</span><span class="ga">'+yrs(x.age)+'</span><span class="gd">'+shortDate(x.born)+' to '+shortDate(x.died)+'</span></div>';
   }).join('') : '<p class="empty">No graves yet. Keep '+PUP+' fed and it stays that way.</p>';
   openSheet('#graves');
 }
@@ -560,7 +599,7 @@ function readColors(){
 function setDim(on){
   if(dimmed === on) return;
   dimmed = on; document.body.classList.toggle('dim', on); readColors();
-  if(on){ lastShift = Date.now(); updateDimClock(); } else $('.shell').style.transform = '';
+  if(on){ lastShift = Date.now(); updateDimClock(); } else { $('.shell').style.transform = ''; $('#dimClock').style.transform = ''; }
 }
 let lastClock = 0, lastShift = 0;
 function updateDimClock(){
@@ -570,7 +609,7 @@ function updateDimClock(){
   const a = currentAct(), left = GOAL - (d.actMs[a] || 0);
   $('#dimAct').textContent = d.done[a] ? ACTS[a].name + ' done ✓ · tap to pick the next one' : ACTS[a].name + ' done in ' + Math.max(1, Math.ceil(left/MIN)) + ' min';
   // 2. burn-in protection: nudge the whole screen a few pixels every 90 seconds
-  if(Date.now() - lastShift >= 90000){ lastShift = Date.now(); const r = () => Math.round(Math.random()*12 - 6); $('.shell').style.transform = 'translate('+r()+'px,'+r()+'px)'; }
+  if(Date.now() - lastShift >= 90000){ lastShift = Date.now(); const r = () => Math.round(Math.random()*12 - 6); const t = 'translate('+r()+'px,'+r()+'px)'; $('.shell').style.transform = t; $('#dimClock').style.transform = t; }
 }
 function anySheetOpen(){ return [...document.querySelectorAll('.sheet')].some(x => !x.hidden); }
 // First tap while dimmed only wakes the screen; it doesn't press whatever is under your finger.
@@ -638,20 +677,28 @@ const SP = {
 };
 /* Bort, an original chihuahua mix: drawn as a vector silhouette, then rasterized to an LCD pixel outline. */
 const mk = document.createElement('canvas'), mctx = mk.getContext('2d', {willReadFrequently:true});
-const SC = 0.4;
+const SC = 0.3; // was 0.4: smaller pup, more room for the activity
+const petLook = () => Object.assign({}, LOOK0, store.pet && store.pet.look);
+const pupScale = () => SC * petLook().size;
+// Scene offsets were tuned for the old 0.4 size; S() keeps props lined up with the pup's current size.
+const S = n => Math.round(n * pupScale() / 0.4);
 function bortBase(cx, foot, o){
   const g = mctx, face = (o.face || 1), rot = o.flipV ? Math.PI : (o.rot || 0);
   g.setTransform(1,0,0,1,0,0);
   g.translate(Math.round(cx) + 0.5, Math.round(foot) + 1 + (o.flipV ? -4 : 0));
-  g.scale(SC, SC);
+  const k = pupScale(); g.scale(k, k);
   if(rot){ g.translate(0,-16); g.rotate(rot*face); g.translate(0,16); }
   g.scale(face*(o.sx == null ? 1 : o.sx), 1);
 }
 function bortShape(o){
-  const g = mctx, wag = o.wag || 0;
+  const g = mctx, wag = o.wag || 0, L = petLook();
   const oval = (x,y,rx,ry,r) => { g.beginPath(); g.ellipse(x,y,rx,ry,r||0,0,Math.PI*2); g.fill(); };
   const leg = (x1,y1,x2,y2) => { g.lineWidth = 5.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
-  const tail = (x,y,r,len) => { g.save(); g.translate(x,y); g.rotate(r); g.lineWidth = 5.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(0,0); g.bezierCurveTo(-len*.55,-len*.15,-len*.75,-len*.75,-len*.25,-len); g.stroke(); g.restore(); };
+  const tail = (x,y,r,len) => { g.save(); g.translate(x,y); g.rotate(r); g.lineWidth = 5.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(0,0);
+    if(L.tail === 'straight') g.lineTo(-len*.85,-len*.6);
+    else if(L.tail === 'stub') g.lineTo(-len*.3,-len*.3);
+    else g.bezierCurveTo(-len*.55,-len*.15,-len*.75,-len*.75,-len*.25,-len);
+    g.stroke(); g.restore(); };
   let head;
   if(o.pose === 'lie'){
     tail(-25,-12,-0.6+wag*0.3,15); oval(0,-13,27,11); oval(-14,-11,10,8); oval(26,-3.4,10,3.6); oval(-17,-3.2,8,3.4);
@@ -671,20 +718,38 @@ function bortShape(o){
     head = {x:23, y:-45, t:(o.down ? 1 : 0)*0.7};
   }
   g.save(); g.translate(head.x, head.y); g.rotate(head.t);
-  g.beginPath(); g.arc(0,-1,13.5,0,Math.PI*2); g.fill(); oval(12,5.5,8.5,6,0.1);
-  g.beginPath(); g.moveTo(-10,-4); g.quadraticCurveTo(-19,-21,-14,-28); g.quadraticCurveTo(-6,-20,-1,-11); g.closePath(); g.fill();
-  g.beginPath(); g.moveTo(-5,-8); g.quadraticCurveTo(-7,-28,0,-31); g.quadraticCurveTo(6,-28,6,-20); g.quadraticCurveTo(6,-13,4,-9); g.closePath(); g.fill();
-  const mouth = g.getTransform().transformPoint(new DOMPoint(17,11));
+  g.beginPath(); g.arc(0,-1,13.5,0,Math.PI*2); g.fill();
+  if(L.snout === 'long') oval(15,6,12,5.5,0.12); else oval(12,5.5,8.5,6,0.1);
+  const earUp = () => { g.beginPath(); g.moveTo(-5,-8); g.quadraticCurveTo(-7,-28,0,-31); g.quadraticCurveTo(6,-28,6,-20); g.quadraticCurveTo(6,-13,4,-9); g.closePath(); g.fill(); };
+  const earFold = () => { g.beginPath(); g.moveTo(-5,-8); g.quadraticCurveTo(-6,-22,2,-24); g.quadraticCurveTo(11,-24,12,-15); g.quadraticCurveTo(6,-15,4,-9); g.closePath(); g.fill(); };
+  // back ear
+  g.beginPath();
+  if(L.ears === 'fold'){ g.moveTo(-10,-4); g.quadraticCurveTo(-18,-16,-12,-20); g.quadraticCurveTo(-4,-20,-1,-11); }
+  else { g.moveTo(-10,-4); g.quadraticCurveTo(-19,-21,-14,-28); g.quadraticCurveTo(-6,-20,-1,-11); }
+  g.closePath(); g.fill();
+  // front ear: 'one' = one up, one flopped
+  if(L.ears === 'up') earUp(); else earFold();
+  const mouth = g.getTransform().transformPoint(new DOMPoint(L.snout === 'long' ? 21 : 17, 11));
   g.restore();
   return {head, mouth};
 }
+function bortMarks(o){
+  const L = petLook(), g = mctx; if(L.mark !== 'saddle') return;
+  g.beginPath();
+  if(o.pose === 'lie') g.ellipse(-4,-17,13,4.5,0,0,Math.PI*2);
+  else if(o.pose === 'sit') g.ellipse(-5,-30,7,10,0.35,0,Math.PI*2);
+  else g.ellipse(-3,-33,13,4,0,0,Math.PI*2);
+  g.fill();
+}
 function bortFace(o, head){
-  const g = mctx;
+  const g = mctx, L = petLook();
   g.save(); g.translate(head.x, head.y); g.rotate(head.t);
   if(o.sleep){ g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(2,-2); g.lineTo(10,-2); g.stroke(); }
   // Open eye is stamped as a clean 2x2 pixel dot in bort(); a rasterized circle came out as a blob.
   const eye = o.sleep ? null : g.getTransform().transformPoint(new DOMPoint(6,-3));
-  g.beginPath(); g.ellipse(20,2.5,3.8,3.2,0,0,Math.PI*2); g.fill();
+  if(L.mark === 'eyepatch'){ g.beginPath(); g.ellipse(6,-3,7,6.5,0,0,Math.PI*2); g.fill(); }
+  if(L.snout === 'long'){ g.beginPath(); g.ellipse(25,3,3.8,3.2,0,0,Math.PI*2); g.fill(); }
+  else { g.beginPath(); g.ellipse(20,2.5,3.8,3.2,0,0,Math.PI*2); g.fill(); }
   g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(-8,9); g.lineTo(-1,12.5); g.stroke();
   const wear = !o.noWear && store.pet && store.pet.wear;
   const poly = pts => { g.beginPath(); g.moveTo(pts[0],pts[1]); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i],pts[i+1]); g.closePath(); g.fill(); };
@@ -706,10 +771,10 @@ function bort(cx, foot, o){
   const inside = i => d[i*4+3] > 110;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(inside(i) && (!inside(i-1) || !inside(i+1) || !inside(i-LW) || !inside(i+LW))) buf[i] = 1; }
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH);
-  bortBase(cx, foot, o); const eye = bortFace(o, info.head);
+  bortBase(cx, foot, o); bortMarks(o); const eye = bortFace(o, info.head);
   d = g.getImageData(0,0,LW,LH).data;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100) buf[i] = 1; }
-  if(eye && !(store.pet && store.pet.wear === 'shades')){ const ex = Math.floor(eye.x - 0.5), ey = Math.floor(eye.y - 0.5); px(ex,ey); px(ex+1,ey); px(ex,ey+1); px(ex+1,ey+1); }
+  if(eye && !(store.pet && store.pet.wear === 'shades')){ const ex = Math.floor(eye.x - 0.5), ey = Math.floor(eye.y - 0.5), dot = petLook().mark === 'eyepatch' ? off : px; dot(ex,ey); dot(ex+1,ey); dot(ex,ey+1); dot(ex+1,ey+1); }
   const m = {x:Math.round(info.mouth.x), y:Math.round(info.mouth.y)};
   if(o.item === 'ball') ball(m.x, m.y);
   else if(o.item === 'disc') hline(m.x-2, m.x+2, m.y);
@@ -767,11 +832,11 @@ function drawWalk(p){
   const sniff = p > 7400 && p < 8800, x = LW*0.45;
   backdrop(A.world);
   bort(x, GY-1, {step:RUN(!sniff), down:sniff, tongue:!sniff});
-  if(sniff) spr(SP.q, x + 6, GY - 36);
+  if(sniff) spr(SP.q, x + S(6), GY - S(36));
 }
 function drawFetch(p){
   backdrop(0);
-  const x0 = LW*0.32, xL = LW*0.82, xp = xL - 10;
+  const x0 = LW*0.32, xL = LW*0.82, xp = xL - S(10);
   let x = x0, face = 1, run = false, item = null, down = false, pose = 'stand', b = null;
   if(p < 1000){}
   else if(p < 2500){ x = lerp(x0, xp, ease((p-1000)/1500)); run = true; }
@@ -780,7 +845,7 @@ function drawFetch(p){
   else { face = -1; pose = 'sit'; }
   if(p >= 900 && p < 2100){ const u = (p-900)/1200; b = [lerp(0, xL, u), Math.max(2, lerp(LH*0.45, GY-2, u) - Math.sin(Math.PI*u)*LH*0.35)]; }
   else if(p >= 2100 && p < 2700){ const u = (p-2100)/600; b = [xL + u*2, GY-2 - Math.abs(Math.sin(u*Math.PI*2))*5*(1-u)]; }
-  else if(p >= 4400){ b = [x0 - 13, GY-2]; }
+  else if(p >= 4400){ b = [x0 - S(13), GY-2]; }
   if(b) ball(Math.round(b[0]), Math.round(b[1]));
   bort(x, GY-1, {face, step:RUN(run), down, pose, item, tongue:!item});
 }
@@ -802,19 +867,19 @@ function drawTricks(p, cyc){
     }
   } else A.caption = '';
   bort(x, y, o);
-  if(doing && k > 0.8) spr(SP.heart, x + 8, GY - 36);
+  if(doing && k > 0.8) spr(SP.heart, x + S(8), GY - S(36));
 }
 function drawFrisbee(p){
   backdrop(0);
-  const x0 = LW*0.3, xL = LW*0.78, xp = xL - 10;
+  const x0 = LW*0.3, xL = LW*0.78, xp = xL - S(10);
   let x = x0, y = GY-1, face = 1, run = false, item = null, pose = 'stand', tuck = false, disc = null;
   if(p < 900){}
   else if(p < 2300){ x = lerp(x0, xp, ease((p-900)/1400)); run = true; }
-  else if(p < 2900){ x = xp; y = GY-1 - Math.round(Math.sin(Math.PI*(p-2300)/600)*11); tuck = true; if(p >= 2600) item = 'disc'; }
+  else if(p < 2900){ x = xp; y = GY-1 - Math.round(Math.sin(Math.PI*(p-2300)/600)*S(11)); tuck = true; if(p >= 2600) item = 'disc'; }
   else if(p < 4400){ x = lerp(xp, x0, ease((p-2900)/1500)); face = -1; run = true; item = 'disc'; }
   else { face = -1; pose = 'sit'; }
-  if(p >= 600 && p < 2600){ const u = (p-600)/2000; disc = [lerp(0, xL+4, u), lerp(LH*0.4, GY-22, u) - Math.sin(Math.PI*u)*LH*0.1]; }
-  else if(p >= 4400){ disc = [x0 - 14, GY-1]; }
+  if(p >= 600 && p < 2600){ const u = (p-600)/2000; disc = [lerp(0, xL+4, u), lerp(LH*0.4, GY-S(22), u) - Math.sin(Math.PI*u)*LH*0.1]; }
+  else if(p >= 4400){ disc = [x0 - S(14), GY-1]; }
   if(disc) hline(disc[0], disc[0]+3, disc[1]);
   bort(x, y, {face, step:RUN(run), item, pose, tuck, tongue:!item});
 }
@@ -822,7 +887,7 @@ function drawBubbles(p, cyc){
   backdrop(0);
   for(let i=0;i<4;i++){ const y = Math.round(LH - ((A.t*0.006 + i*LH/4) % (LH*1.1))), x = Math.round(LW*(0.1 + 0.8*hash(i+20)) + Math.sin(A.t*0.002 + i)*2); if(y < GY-2){ px(x,y-1); px(x-1,y); px(x+1,y); px(x,y+1); } }
   const prev = LW*(0.25 + 0.5*hash(cyc)), tx = LW*(0.25 + 0.5*hash(cyc+1)), face = tx >= prev ? 1 : -1;
-  const bx = tx + face*9, by = lerp(4, GY-34, ease(p/1800));
+  const bx = tx + face*S(9), by = lerp(4, GY-S(34), ease(p/1800));
   if(p < 2050) spr(SP.bubble, bx-2, by-2); else if(p < 2450) spr(SP.pop, bx-2, by-2);
   const x = lerp(prev, tx, ease(p/1700));
   let y = GY-1; if(p > 1750 && p < 2300) y = GY-1 - Math.round(Math.sin(Math.PI*(p-1750)/550)*7);
@@ -830,16 +895,16 @@ function drawBubbles(p, cyc){
 }
 function drawDig(p){
   backdrop(0);
-  const x = LW*0.45, grow = clamp(p/5000), h = 1 + Math.floor(grow*3), mx = x - 15;
+  const x = LW*0.45, grow = clamp(p/5000), h = 1 + Math.floor(grow*3), mx = x - S(15), hx = Math.round(x + S(14));
   for(let i=0;i<h;i++) hline(mx-(h-i)*2+1, mx+(h-i)*2-1, GY-1-i);
-  for(let i=0;i<5;i++) off(x + 14 + i, GY);
-  px(x+13, GY+1); px(x+19, GY+1); hline(x+14, x+18, GY+2);
+  for(let i=0;i<5;i++) off(hx + i, GY);
+  px(hx-1, GY+1); px(hx+5, GY+1); hline(hx, hx+4, GY+2);
   if(p < 5000){
     for(let j=0;j<4;j++){ const q = ((A.t*0.0022) + j/4) % 1; px(x - 2 - q*14, GY - 3 - Math.sin(q*Math.PI)*9); }
     bort(x, GY-1, {down:true, step:Math.floor(A.t/120) % 2 === 1});
   } else {
     bort(x, GY-1, {pose:'sit', item:'bone'});
-    spr(SP.ex, x + 6, GY - 36);
+    spr(SP.ex, x + S(6), GY - S(36));
   }
 }
 function drawSnuffle(p, cyc){
@@ -849,9 +914,9 @@ function drawSnuffle(p, cyc){
   const spot = i => mx + mw*(0.1 + 0.2*i);
   const j = cyc % 5, pj = (cyc + 4) % 5;
   for(let i=0;i<5;i++){ if(i === j && u > 0.75) continue; px(spot(i), GY-4); px(spot(i)+1, GY-4); }
-  const x = lerp(spot(pj), spot(j), ease(u/0.4)) - 15;
+  const x = lerp(spot(pj), spot(j), ease(u/0.4)) - S(15);
   bort(x, GY-3, {down:u >= 0.4, step:RUN(u < 0.4)});
-  if(u > 0.75) spr(SP.heart, x + 6, GY - 36); else if(u > 0.4) spr(SP.q, x + 6, GY - 36);
+  if(u > 0.75) spr(SP.heart, x + S(6), GY - S(36)); else if(u > 0.4) spr(SP.q, x + S(6), GY - S(36));
 }
 function drawTug(){
   backdrop(0);
@@ -875,7 +940,7 @@ function drawAgility(){
 function drawButterfly(p){
   backdrop(0);
   const T = ACTS.butterfly.T, k = p/T;
-  const bx = LW*(0.5 + 0.38*Math.sin(2*Math.PI*k)), by = GY - 34 + Math.round(Math.sin(k*Math.PI*6)*4);
+  const bx = LW*(0.5 + 0.38*Math.sin(2*Math.PI*k)), by = GY - S(34) + Math.round(Math.sin(k*Math.PI*6)*4);
   const kk = k - 0.07, x = LW*(0.5 + 0.34*Math.sin(2*Math.PI*kk)), face = Math.cos(2*Math.PI*kk) >= 0 ? 1 : -1;
   spr(Math.floor(A.t/150) % 2 ? SP.flyA : SP.flyB, bx-1, by-1);
   bort(x, GY-1, {face, step:RUN(true), tongue:true});
@@ -885,11 +950,11 @@ function drawReturn(now){
   const rt = now - A.returnStart, wx = Math.round(LW*0.78);
   vline(wx, GY-30, GY-1); hline(wx, LW-1, GY-30);
   vline(wx+4, GY-18, GY-1); vline(wx+13, GY-18, GY-1); hline(wx+4, wx+13, GY-18); px(wx+11, GY-9);
-  if(rt < 1700) bort(wx - 12, GY-1, {pose:'sit'});
+  if(rt < 1700) bort(wx - S(12), GY-1, {pose:'sit'});
   else {
-    const k = clamp((rt-1700)/1800), x = wx - 10 - k*LW*0.25;
+    const k = clamp((rt-1700)/1800), x = wx - S(10) - k*LW*0.25;
     bort(x, GY-1 - Math.round(Math.abs(Math.sin(k*Math.PI*3))*6), {face:-1, tongue:true, tuck:true});
-    spr(SP.heart, x - 3, GY - 38);
+    spr(SP.heart, x - 3, GY - S(38));
   }
 }
 function drawParty(now){
@@ -905,12 +970,12 @@ function drawEat(now){
   const bx = m.x - 1;
   spr(SP.bowl, bx, GY-2);
   const left = 4 - Math.floor(clamp(rt/2600)*4); if(left > 0 && !down) hline(bx+1, bx+left, GY-3);
-  if(rt > 2500) spr(SP.heart, x + 2, GY - 34);
+  if(rt > 2500) spr(SP.heart, x + 2, GY - S(34));
 }
 function drawPoop(now){
   backdrop(0);
   bort(LW*0.55, GY-1, {pose:'sit'});
-  spr(SP.ex, LW*0.55 + 6, GY - 36);
+  spr(SP.ex, LW*0.55 + S(6), GY - S(36));
 }
 function drawGrave(now){
   backdrop(0);
@@ -920,10 +985,23 @@ function drawGrave(now){
   const hy = GY - 26 + (Math.floor(now/600) % 2);
   hline(x-3, x+3, hy); px(x-4, hy+1); px(x+4, hy+1);
 }
+function drawGone(now){
+  backdrop(0);
+  const gx = Math.round(LW*0.42), fy = GY - 7;
+  for(let x=0;x<gx;x+=4) vline(x, fy-1, GY-1);
+  hline(0, gx, fy); hline(0, gx, fy+3);
+  // gate swung open
+  vline(gx, fy-1, GY-1); line(gx, fy, gx+4, fy-5); line(gx, GY-1, gx+4, GY-6); line(gx+4, fy-5, gx+4, GY-6);
+  spr(SP.bowl, Math.round(LW*0.2), GY-2);
+  // paw prints leading off screen, appearing one by one
+  const shown = Math.floor(now/450) % 9;
+  for(let i=0;i<shown;i++){ const x = gx + 8 + i*5, y = GY + 2 + (i % 2)*2; px(x,y); px(x+1,y); }
+  spr(SP.q, gx + 10, GY - 16 + (Math.floor(now/600) % 2));
+}
 function drawKennel(now){
   backdrop(0);
   const dx = Math.round(LW*0.5), x0 = dx - 15, x1 = dx + 15, wall = GY - 18, peak = GY - 30;
-  bort(dx - 10, GY-1, {pose:'lie', sleep:true});
+  bort(dx - S(10), GY-1, {pose:'lie', sleep:true});
   for(let y=peak-24;y<GY;y++) for(let x=x0-16;x<=x1+3;x++){ const inDoor = x > dx-6 && x < dx+6 && y > GY-12; if(!inDoor) off(x,y); }
   vline(x0, wall, GY-1); vline(x1, wall, GY-1);
   line(x0-3, wall+1, dx, peak); line(dx, peak, x1+3, wall+1); hline(x0-3, x1+3, wall+1);
@@ -934,9 +1012,9 @@ function drawKennel(now){
 function drawSleep(now){
   backdrop(0);
   const x = LW*0.5;
-  hline(x-14, x+16, GY-1); px(x-15, GY-2); px(x+17, GY-2);
+  hline(x-S(14), x+S(16), GY-1); px(x-S(14)-1, GY-2); px(x+S(16)+1, GY-2);
   bort(x, GY-2, {pose:'lie', sleep:true});
-  for(let i=0;i<2;i++){ const ph = ((now*0.0004) + i/2) % 1; spr(SP.z, x + 12 + Math.round(ph*5), GY - 20 - Math.round(ph*9)); }
+  for(let i=0;i<2;i++){ const ph = ((now*0.0004) + i/2) % 1; spr(SP.z, x + S(12) + Math.round(ph*5), GY - S(20) - Math.round(ph*9)); }
 }
 
 function advance(fdt){
@@ -962,7 +1040,7 @@ function frame(){
   if(W > 0 && (dirty || now - lastDraw >= (dimmed ? 250 : 110))){
     lastDraw = now; dirty = false; buf.fill(0);
     if(store.mode !== 'playing' || store.activity == null) A.caption = '';
-    if(store.pet.dead) drawGrave(now);
+    if(store.pet.dead) (store.pet.cause === 'ran' ? drawGone : drawGrave)(now);
     else if(eating) drawEat(now);
     else if(store.mode === 'playing'){
       if(returning) drawReturn(now);
@@ -999,7 +1077,9 @@ function render(){
   else if(m === 'free') st = 'Free break · '+fmtClock(Math.max(0, store.freeStart + FREE - Date.now()))+' left';
   else if(m === 'ended') st = "Day's done. "+PUP+' is worn out.';
   else st = ACTS[a].name+' · '+(A.caption || plural(d.actCount[a] || 0, ACTS[a].unit));
-  if(store.pet.dead) st = PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
+  const fun = sinceFun(Date.now());
+  if(!store.pet.dead && fun >= RESTLESS*DAY && m !== 'playing'){ const left = Math.max(1, Math.ceil((RUNAWAY*DAY - fun)/DAY)); st = PUP+' is restless: no enrichment in '+Math.floor(fun/DAY)+' days. Finish one within '+left+(left === 1 ? ' day' : ' days')+' or '+PUP+' may run away.'; }
+  if(store.pet.dead) st = store.pet.cause === 'ran' ? PUP+' ran away. Adopt a new puppy.' : PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
   $('#brand').textContent = PUP.toUpperCase()+' · AGE '+store.pet.age;
   syncPings();
@@ -1029,7 +1109,7 @@ function render(){
   pr.textContent = m === 'idle' ? 'Start day' : (m === 'playing' || m === 'free') ? 'End focus' : m === 'break' ? 'Start focus' : "Today's score";
   se.textContent = m === 'ended' ? 'Resume day' : 'End day';
   se.disabled = m === 'idle';
-  if(store.pet.dead){ pr.textContent = 'Revive or rest'; }
+  if(store.pet.dead){ pr.textContent = store.pet.cause === 'ran' ? 'Adopt' : 'Revive or rest'; }
 }
 $('#primary').addEventListener('click', () => { if(store.pet.dead){ openDead(); return; } const m = store.mode; if(m === 'idle') startDay(); else if(m === 'playing' || m === 'free') takeBreak(); else if(m === 'break') backToWork(); else openSummary(); });
 $('#secondary').addEventListener('click', () => { if(store.mode === 'ended') resumeDay(); else if(store.mode !== 'idle') endDay(); });
