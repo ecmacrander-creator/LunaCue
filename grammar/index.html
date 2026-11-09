@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KM Grammar Practice Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --red:#C8102E;
+    --red-dark:#A50D26;
+    --red-soft:#FBE9EC;
+    --teal:#177C85;
+    --teal-dark:#0F5A61;
+    --teal-soft:#E3F1F2;
+    --gray:#F3F4F5;
+    --line:#D9DCE0;
+    --text:#1F2933;
+    --muted:#5B6670;
+    --white:#FFFFFF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+  body{font-family:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);background:var(--white);line-height:1.5;min-height:100vh;display:flex;flex-direction:column}
+  .topbar{height:6px;background:var(--red)}
+  header{background:var(--gray);border-bottom:1px solid var(--line)}
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:18px;padding-bottom:18px;gap:16px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;background:var(--red);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:17px;letter-spacing:.5px}
+  .brand-title{font-weight:800;font-size:20px;line-height:1.1}
+  .brand-sub{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;font-weight:600}
+  .counter{font-size:14px;color:var(--muted);font-weight:600;white-space:nowrap}
+  main{flex:1;padding:36px 0 56px}
+  .eyebrow{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--teal)}
+  h1{font-size:34px;line-height:1.15;font-weight:800;margin:8px 0 14px}
+  h2{font-size:22px;font-weight:800;margin-bottom:14px}
+  p.lead{font-size:18px;color:var(--muted);max-width:640px}
+  .intro-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:28px 0}
+  .stat{background:var(--gray);padding:16px 18px;border-left:4px solid var(--teal)}
+  .stat:nth-child(2){border-left-color:var(--red)}
+  .stat b{display:block;font-size:24px;font-weight:800}
+  .stat span{font-size:14px;color:var(--muted)}
+  .btn{display:inline-block;text-decoration:none;font:inherit;font-weight:700;font-size:16px;padding:12px 26px;border:2px solid var(--teal);background:var(--teal);color:#fff;cursor:pointer;transition:background .15s,border-color .15s}
+  .btn:hover:not(:disabled){background:var(--teal-dark);border-color:var(--teal-dark)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--teal)}
+  .btn.ghost:hover:not(:disabled){background:var(--teal-soft)}
+  .btn.red{background:var(--red);border-color:var(--red)}
+  .btn.red:hover:not(:disabled){background:var(--red-dark);border-color:var(--red-dark)}
+  .btn.small{font-size:14px;padding:8px 16px}
+  .btn.disabled{opacity:.4;pointer-events:none}
+  .hint{font-size:14px;color:var(--muted);margin-top:14px}
+  .field{margin:6px 0 20px;max-width:420px}
+  .field label{display:block;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+  .field input{width:100%;font:inherit;font-size:18px;padding:12px 14px;border:2px solid var(--line);color:var(--text);background:#fff;outline:none}
+  .field input:focus{border-color:var(--teal)}
+  .field .note{font-size:14px;color:var(--muted);margin-top:6px}
+  .start-actions{display:flex;gap:12px;flex-wrap:wrap}
+  /* Quiz */
+  .quiz-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+  .timer{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;padding:6px 14px;background:var(--gray);color:var(--text);min-width:96px;text-align:center}
+  .timer.warn{background:var(--red);color:#fff}
+  .timer small{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;opacity:.75;line-height:1}
+  .progress{height:8px;background:var(--gray);margin-bottom:28px}
+  .progress > div{height:100%;background:var(--teal);width:0;transition:width .25s}
+  .qnum{font-size:14px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:1.2px}
+  .qprompt{font-size:20px;font-weight:700;margin:6px 0 20px}
+  .options{display:flex;flex-direction:column;gap:10px}
+  .opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;font:inherit;font-size:18px;color:var(--text);background:var(--white);border:2px solid var(--line);padding:16px 18px;cursor:pointer;transition:border-color .12s,background .12s}
+  .opt:hover{border-color:var(--teal)}
+  .opt .letter{flex:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;background:var(--gray);color:var(--text)}
+  .opt.selected{border-color:var(--teal);background:var(--teal-soft)}
+  .opt.selected .letter{background:var(--teal);color:#fff}
+  .nav{display:flex;justify-content:space-between;align-items:center;margin-top:28px;gap:12px}
+  .dots{display:flex;flex-wrap:wrap;gap:5px;margin-top:26px}
+  .dot{width:26px;height:26px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;background:var(--gray);color:var(--muted);border:none;cursor:pointer;font-family:inherit}
+  .dot.answered{background:var(--teal-soft);color:var(--teal-dark)}
+  .dot.current{background:var(--teal);color:#fff}
+  /* Results */
+  .timesup{background:var(--red-soft);border-left:6px solid var(--red);padding:12px 18px;font-weight:700;margin-bottom:14px}
+  .score-band{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center;background:var(--gray);padding:26px 28px;border-left:6px solid var(--red);margin:10px 0 34px}
+  .score-big{font-size:64px;font-weight:800;line-height:1;color:var(--red)}
+  .score-big small{display:block;font-size:15px;font-weight:600;color:var(--muted);margin-top:6px}
+  .score-label{font-size:24px;font-weight:800}
+  .score-note{color:var(--muted);margin-top:4px}
+  .cat-table{width:100%;border-collapse:collapse;margin-bottom:12px}
+  .cat-table th{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;padding:8px 0;border-bottom:2px solid var(--line)}
+  .cat-table td{padding:12px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+  .cat-name{font-weight:700;width:34%}
+  .bar{height:12px;background:var(--gray);position:relative}
+  .bar > div{height:100%;background:var(--teal)}
+  .bar.low > div{background:var(--red)}
+  .cat-score{width:70px;text-align:right;font-weight:700;padding-left:14px!important}
+  .callouts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0 40px}
+  .callout{padding:16px 18px;background:var(--teal-soft)}
+  .callout.focus{background:var(--red-soft)}
+  .callout b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .callout.strong b{color:var(--teal-dark)}
+  .callout.focus b{color:var(--red)}
+  .filter{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .chip{font:inherit;font-size:14px;font-weight:700;padding:6px 14px;border:2px solid var(--line);background:#fff;color:var(--muted);cursor:pointer}
+  .chip.on{border-color:var(--teal);color:var(--teal-dark);background:var(--teal-soft)}
+  .review{border:1px solid var(--line);border-left:5px solid var(--teal);padding:18px 20px;margin-bottom:12px}
+  .review.wrong{border-left-color:var(--red)}
+  .review-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .tag{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:4px 10px;background:var(--gray);color:var(--text)}
+  .verdict{font-size:14px;font-weight:800}
+  .verdict.ok{color:var(--teal)}
+  .verdict.no{color:var(--red)}
+  .rline{font-size:16px;margin:4px 0;display:flex;gap:10px}
+  .rline .k{flex:none;width:118px;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;padding-top:2px}
+  .explain{margin-top:10px;background:var(--gray);padding:12px 14px;font-size:15px}
+  .trick{margin-top:8px;background:var(--teal-soft);border-left:4px solid var(--teal);padding:10px 14px;font-size:15px}
+  .trick b{color:var(--teal-dark);text-transform:uppercase;font-size:12px;letter-spacing:1px;display:block}
+  .email-box{background:var(--gray);padding:20px 22px;margin-top:30px}
+  .email-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .email-row .field{margin:0;flex:1;min-width:220px}
+  .actions{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap}
+  footer{border-top:1px solid var(--line);background:var(--gray);font-size:13px;color:var(--muted)}
+  footer .wrap{padding-top:14px;padding-bottom:14px}
+  /* Leaderboard */
+  .board{width:100%;border-collapse:collapse}
+  .board th{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:2px solid var(--line)}
+  .board td{padding:11px 10px;border-bottom:1px solid var(--line);font-size:17px}
+  .board td.rank{width:56px;font-weight:800;color:var(--muted)}
+  .board td.pct{text-align:right;font-weight:800;width:90px}
+  .board td.cnt{text-align:right;color:var(--muted);width:90px;font-variant-numeric:tabular-nums}
+  .board tr.top1 td.rank{color:var(--red)}
+  .board tr.top1 td,.board tr.top2 td,.board tr.top3 td{font-weight:700}
+  .board tr.me td{background:var(--teal-soft)}
+  .board tr.me td.rank{color:var(--teal-dark)}
+  .board-meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .board-meta span{color:var(--muted);font-size:14px}
+  .rank-callout{background:var(--teal-soft);border-left:6px solid var(--teal);padding:16px 20px;font-size:18px;margin-bottom:18px}
+  .rank-callout b{color:var(--teal-dark)}
+  .empty{padding:24px;background:var(--gray);color:var(--muted);text-align:center}
+  .admin{margin-top:34px;padding-top:18px;border-top:1px solid var(--line)}
+  .admin-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .admin-row input{font:inherit;font-size:16px;padding:8px 12px;border:2px solid var(--line);width:140px;outline:none}
+  .admin-row input:focus{border-color:var(--teal)}
+  .admin-msg{font-size:14px;margin-top:8px;color:var(--muted)}
+  .admin-msg.err{color:var(--red);font-weight:700}
+  body.present main{padding-top:24px}
+  body.present h1{font-size:44px}
+  body.present .board td{font-size:26px;padding:14px 12px}
+  body.present .board th{font-size:16px}
+  body.present .board td.rank,body.present .board td.pct,body.present .board td.cnt{width:auto}
+  .hidden{display:none!important}
+  @media (max-width:640px){
+    h1{font-size:28px}
+    .intro-grid{grid-template-columns:1fr}
+    .score-band{grid-template-columns:1fr;gap:12px}
+    .callouts{grid-template-columns:1fr}
+    .cat-name{width:42%}
+    .rline{flex-direction:column;gap:0}
+    .opt{font-size:17px}
+    .board td{font-size:16px;padding:10px 6px}
+  }
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark">KM</div>
+      <div>
+        <div class="brand-title">Grammar Practice Test</div>
+        <div class="brand-sub">RCSS Team Gathering 2026</div>
+      </div>
+    </div>
+    <div class="counter" id="counter"></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- Start -->
+    <section id="start">
+      <div class="eyebrow">Practice Test</div>
+      <h1>KM Grammar Check</h1>
+      <p class="lead">A quick check of the everyday grammar you already use in emails, reports, and procedures. For each question, pick the correct sentence. You've got this.</p>
+      <div class="intro-grid">
+        <div class="stat"><b>15</b><span>Questions</span></div>
+        <div class="stat"><b>5 min</b><span>On the clock</span></div>
+        <div class="stat"><b>Instant</b><span>Results and memory tricks</span></div>
+      </div>
+      <div class="field">
+        <label for="nameInput">Create a Nickname</label>
+        <input id="nameInput" maxlength="24" autocomplete="off" placeholder="e.g., CommaChameleon">
+        <div class="note">Please don't use your real name. Your nickname is what shows on the leaderboard.</div>
+      </div>
+      <div class="start-actions">
+        <button class="btn red" id="startBtn" disabled>Start the Test</button>
+        <button class="btn ghost" id="viewBoardBtn">View Leaderboard</button>
+      </div>
+      <p class="hint">The 5-minute timer starts when you click Start. Tip: Use the A, B, C keys to answer and Enter to move on.</p>
+    </section>
+
+    <!-- Leaderboard view -->
+    <section id="boardView" class="hidden">
+      <div class="eyebrow">Live Results</div>
+      <h1>Leaderboard</h1>
+      <div class="board-meta"><h2 style="margin:0">Top Scores</h2><span id="boardViewMeta">Loading…</span></div>
+      <div id="boardViewBody"></div>
+      <div class="actions">
+        <button class="btn ghost" id="boardBackBtn">Back to Start</button>
+        <button class="btn ghost" id="refreshBtn">Refresh Now</button>
+      </div>
+      <div class="admin">
+        <div class="admin-row">
+          <input id="resetCode" type="password" inputmode="numeric" placeholder="Admin code" autocomplete="off">
+          <button class="btn red small" id="resetBtn">Reset Leaderboard</button>
+        </div>
+        <div class="admin-msg" id="resetMsg">Clears the board for a new session. Past scores are archived, not deleted.</div>
+      </div>
+    </section>
+
+    <!-- Quiz -->
+    <section id="quiz" class="hidden">
+      <div class="quiz-top">
+        <div class="qnum" id="qnum"></div>
+        <div class="timer" id="timer"><small>Time left</small><span id="timerText">5:00</span></div>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="qprompt">Choose the correct sentence.</div>
+      <div class="options" id="options"></div>
+      <div class="nav">
+        <button class="btn ghost" id="backBtn">Back</button>
+        <button class="btn" id="nextBtn" disabled>Next</button>
+      </div>
+      <div class="dots" id="dots"></div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden">
+      <div class="eyebrow">Your Results</div>
+      <h1>Score Summary</h1>
+      <div class="timesup hidden" id="timesUp">Time's up. Unanswered questions were counted as missed.</div>
+      <div class="score-band">
+        <div class="score-big" id="scorePct"></div>
+        <div>
+          <div class="score-label" id="scoreLabel"></div>
+          <div class="score-note" id="scoreNote"></div>
+        </div>
+      </div>
+
+      <h2>Leaderboard</h2>
+      <div class="rank-callout" id="rankCallout">Saving your score…</div>
+      <div class="board-meta"><span id="boardMeta"></span></div>
+      <div id="boardBody" style="margin-bottom:36px"></div>
+
+      <h2>Results by Category</h2>
+      <table class="cat-table">
+        <thead><tr><th>Category</th><th></th><th style="text-align:right">Score</th></tr></thead>
+        <tbody id="catBody"></tbody>
+      </table>
+      <div class="callouts">
+        <div class="callout strong"><b>Strongest Area</b><span id="strongest"></span></div>
+        <div class="callout focus"><b>Focus Area</b><span id="focus"></span></div>
+      </div>
+
+      <h2>Answer Review</h2>
+      <div class="filter" id="filter">
+        <button class="chip on" data-f="all">All</button>
+        <button class="chip" data-f="wrong">Missed Only</button>
+        <button class="chip" data-f="right">Correct Only</button>
+      </div>
+      <div id="review"></div>
+
+      <div class="email-box">
+        <h2 style="margin-bottom:6px">Email My Results</h2>
+        <p class="hint" style="margin:0 0 14px">Sends your score, category results, and memory tricks to yourself from your own email app.</p>
+        <div class="email-row">
+          <div class="field">
+            <label for="emailInput">Your Email</label>
+            <input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com">
+          </div>
+          <a class="btn disabled" id="emailBtn" target="_blank" rel="noopener" href="#">Open Email</a>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn red" id="retakeBtn">Retake the Test</button>
+        <button class="btn ghost" id="copyBtn">Copy My Results</button>
+      </div>
+      <p class="hint" id="copyMsg"></p>
+    </section>
+
+  </div>
+</main>
+
+<footer><div class="wrap">Internal practice activity. Only your nickname and score appear on the leaderboard.</div></footer>
+
+<script>
+const TIME_LIMIT = 300; // seconds
+
+const QUESTIONS = [
+  { cat:"Subject-Verb Agreement", options:[
+      "Drew is one of those managers who play in a classic rock cover band.",
+      "Drew is one of those managers who plays in a classic rock cover band."],
+    answer:0,
+    why:"\"Who\" refers to \"managers\" (the group that plays in cover bands), not to \"one.\" A plural antecedent takes a plural verb: \"who play.\"",
+    tip:"Flip it: \"Of those managers who play in cover bands, Drew is one.\" The verb belongs to the group." },
+
+  { cat:"Pronouns", options:[
+      "Emily assigned the PSM/RMP acknowledgment to 11,000 people by accident, and Paige and she said, \"Oh no.\"",
+      "Emily assigned the PSM/RMP acknowledgment to 11,000 people by accident, and Paige and her said, \"Oh no.\""],
+    answer:0,
+    why:"\"Paige and she\" is the subject of \"said,\" so the pronoun takes the subject form: \"she.\"",
+    tip:"Drop the other person: \"she said,\" not \"her said.\"" },
+
+  { cat:"Apostrophes", options:[
+      "Kim Dang bought Nat a toaster after the veteran's event.",
+      "Kim Dang bought Nat a toaster after the veterans' event."],
+    answer:1,
+    why:"The event belongs to many veterans, so it's a plural possessive. Make the word plural first (veterans), then add the apostrophe after the s.",
+    tip:"Count the owners. One owner: 's. More than one owner ending in s: s'." },
+
+  { cat:"Word Choice", options:[
+      "The MAS 9 release had such a positive affect on Valerie that she celebrated with a wine tasting trip.",
+      "The MAS 9 release had such a positive effect on Valerie that she celebrated with a wine tasting trip."],
+    answer:1,
+    why:"\"Effect\" is the noun (a result). \"Affect\" is usually the verb (to influence). After \"a positive,\" you need the noun.",
+    tip:"Affect is the Action; Effect is the End result. If \"a,\" \"an,\" or \"the\" comes before it, it's usually effect." },
+
+  { cat:"Subject-Verb Agreement", options:[
+      "Gina, along with her tuning flute, show up to every birthday celebration.",
+      "Gina, along with her tuning flute, shows up to every birthday celebration."],
+    answer:1,
+    why:"Phrases like \"along with,\" \"as well as,\" and \"together with\" don't make a subject plural. The subject is just \"Gina,\" so the verb is \"shows.\"",
+    tip:"Cross out everything between the commas: \"Gina shows up.\"" },
+
+  { cat:"Pronouns", options:[
+      "The only kind of pot allowed at Kinder Morgan is the kind painted by whoever went to Mad Hatter on Tuesday.",
+      "The only kind of pot allowed at Kinder Morgan is the kind painted by whomever went to Mad Hatter on Tuesday."],
+    answer:0,
+    why:"Inside the clause \"___ went to Mad Hatter,\" the pronoun is the subject of \"went,\" so it's \"whoever,\" even after \"by.\"",
+    tip:"He/him test on the verb right after it: \"he went\" (not \"him went\") means whoever. Whom and him both end in m." },
+
+  { cat:"Apostrophes", options:[
+      "When Brittany gets angry, she lets out her \"little fella.\"",
+      "When Brittany gets angry, she let's out her \"little fella.\""],
+    answer:0,
+    why:"\"Let's\" is a contraction of \"let us.\" Here \"lets\" is just the verb with an -s (she lets), so there's no apostrophe.",
+    tip:"Expand it. \"She let us out her little fella\" makes no sense, so it's \"lets.\"" },
+
+  { cat:"Word Choice", options:[
+      "Our OSG department comprises several teams.",
+      "Our OSG department is comprised of several teams.",
+      "Both A and B are correct."],
+    answer:0,
+    why:"The whole comprises its parts. \"Comprises\" already means \"is made up of,\" so \"is comprised of\" is redundant in formal writing.",
+    tip:"Never \"comprised of.\" If you need \"of,\" switch to \"composed of\" or \"made up of.\"" },
+
+  { cat:"Subject-Verb Agreement", options:[
+      "Without Pat, the number of people who could run KM is exactly zero.",
+      "Without Pat, the number of people who could run KM are exactly zero."],
+    answer:0,
+    why:"\"The number of\" refers to one number, so it takes a singular verb: \"is.\" (\"A number of\" means \"several\" and takes a plural verb.)",
+    tip:"\"The number\" is singular (is). \"A number\" is plural (are)." },
+
+  { cat:"Pronouns", options:[
+      "Us Houston folks know our office is much cooler than the offices in Colorado.",
+      "We Houston folks know our office is much cooler than the offices in Colorado."],
+    answer:1,
+    why:"The pronoun is the subject of \"know,\" so it takes the subject form: \"we.\"",
+    tip:"Cover the noun. Drop \"Houston folks\" and say it: \"We know,\" not \"Us know.\"" },
+
+  { cat:"Apostrophes", options:[
+      "The corporate gift at the year-end party was one custom Oreo, and recipients were disappointed that it's filling wasn't even double stuffed.",
+      "The corporate gift at the year-end party was one custom Oreo, and recipients were disappointed that its filling wasn't even double stuffed.",
+      "The corporate gift at the year-end party was one custom Oreo, and recipients were disappointed that its' filling wasn't even double stuffed."],
+    answer:1,
+    why:"\"Its\" (no apostrophe) is the possessive, like his or hers. \"It's\" always means \"it is\" or \"it has.\" \"Its'\" isn't a word.",
+    tip:"Try \"it is\": \"it is filling\" doesn't work, so it's \"its.\"" },
+
+  { cat:"Word Choice", options:[
+      "The printed Storyline storyboards have lain on the printer since Friday.",
+      "The printed Storyline storyboards have laid on the printer since Friday."],
+    answer:0,
+    why:"\"Lie\" (to rest) goes lie, lay, lain. \"Lay\" (to put something down) goes lay, laid, laid. The storyboards are resting, so \"have lain.\"",
+    tip:"You lay something down; things that just rest lie. \"Lain\" rhymes with \"remain\": still sitting there." },
+
+  { cat:"Subject-Verb Agreement", options:[
+      "Matt and Ann each has a story about their Tuesday flight in.",
+      "Matt and Ann each have a story about their Tuesday flight in."],
+    answer:1,
+    why:"When \"each\" comes after a plural subject, the subject is still plural (Matt and Ann), so the verb is plural: \"have.\"",
+    tip:"Cover \"each\": \"Matt and Ann have.\"" },
+
+  { cat:"Pronouns", options:[
+      "Nobody was happier to see MAS 9 go live than we.",
+      "Nobody was happier to see MAS 9 go live than us."],
+    answer:0,
+    why:"\"Than\" introduces an implied clause: \"than we [were].\" In formal grammar, the pronoun is the subject of that unstated verb, so it's \"we.\"",
+    tip:"Finish the sentence in your head: \"than we were.\"" },
+
+  { cat:"Apostrophes", options:[
+      "The RCSS team is at its wit's end with Litmos.",
+      "The RCSS team is at its wits' end with Litmos.",
+      "The RCSS team is at its wits end with Litmos."],
+    answer:1,
+    why:"The idiom is about the end of your wits (plural), so it's a plural possessive: the apostrophe goes after the s, \"wits' end.\"",
+    tip:"You have more than one wit to lose. Plural wits gets the apostrophe after the s." }
+];
+
+const LETTERS = ["A","B","C"];
+let current = 0;
+let answers = new Array(QUESTIONS.length).fill(null);
+let playerName = "";
+let startTime = 0, timerId = null, elapsedSec = 0, timedOut = false;
+let resultText = "", resultEmailBody = "";
+
+const $ = id => document.getElementById(id);
+const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+const show = id => {
+  ["start","quiz","results","boardView"].forEach(s => $(s).classList.toggle("hidden", s !== id));
+  if (id !== "boardView") stopBoardRefresh();
+};
+
+/* ---------- Backend (Supabase) ---------- */
+const SB_URL = "https://resqzilcqmsyxeuqbgdf.supabase.co";
+const SB_KEY = "sb_publishable_iVYwO4oh4QUOyE-9MknNwQ_9dlotpSW";
+const SB_HEADERS = { "apikey": SB_KEY, "Content-Type": "application/json" };
+
+async function sb(path, opts = {}){
+  const res = await fetch(`${SB_URL}/rest/v1/${path}`, { ...opts, headers: { ...SB_HEADERS, ...(opts.headers || {}) } });
+  if (!res.ok){
+    let msg = `Request failed (${res.status})`;
+    try { const j = await res.json(); if (j && j.message) msg = j.message; } catch(e){}
+    throw new Error(msg);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+/* Best score per nickname (case-insensitive). Ties go to the faster time, then whoever finished first. */
+function buildBoard(list){
+  const best = {};
+  (list || []).forEach(r => {
+    const name = String(r.nickname || "").trim();
+    if (!name) return;
+    const k = name.toLowerCase();
+    const row = { name, correct: r.correct, total: r.total, seconds: r.seconds,
+                  pct: Math.round(r.correct / r.total * 100), ts: Date.parse(r.created_at) || 0 };
+    const c = best[k];
+    if (!c || row.pct > c.pct || (row.pct === c.pct && row.seconds < c.seconds)) best[k] = row;
+  });
+  const rows = Object.values(best).sort((a,b) => b.pct - a.pct || a.seconds - b.seconds || a.ts - b.ts);
+  return { players: rows.length, rows };
+}
+
+const api = {
+  async board(){
+    return buildBoard(await sb("scores?select=nickname,correct,total,seconds,created_at&archived=eq.false&order=created_at.asc&limit=5000"));
+  },
+  async submit(name, correct, total, cats, seconds){
+    await sb("scores", {
+      method: "POST",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify({ nickname: name.slice(0,24), correct, total, seconds: Math.max(0, Math.min(3600, seconds)), categories: String(cats).slice(0,500) })
+    });
+    return api.board();
+  },
+  async reset(code){
+    await sb("rpc/reset_leaderboard", { method: "POST", body: JSON.stringify({ code }) });
+    return api.board();
+  }
+};
+
+/* ---------- Leaderboard rendering ---------- */
+function renderBoard(container, data, meName, limit){
+  container.innerHTML = "";
+  if (!data.rows.length){
+    container.innerHTML = '<div class="empty">No scores yet. Be the first.</div>';
+    return;
+  }
+  const meKey = (meName || "").toLowerCase();
+  const table = document.createElement("table");
+  table.className = "board";
+  table.innerHTML = '<thead><tr><th>Rank</th><th>Nickname</th><th style="text-align:right">Time</th><th style="text-align:right">Score</th></tr></thead>';
+  const tb = document.createElement("tbody");
+  data.rows.forEach((r, i) => {
+    const rank = i + 1;
+    const isMe = meKey && r.name.toLowerCase() === meKey;
+    if (i >= limit && !isMe) return;
+    const tr = document.createElement("tr");
+    tr.className = (rank <= 3 ? "top" + rank : "") + (isMe ? " me" : "");
+    tr.innerHTML = '<td class="rank"></td><td class="nm"></td><td class="cnt"></td><td class="pct"></td>';
+    tr.querySelector(".rank").textContent = "#" + rank;
+    tr.querySelector(".nm").textContent = r.name + (isMe ? " (you)" : "");
+    tr.querySelector(".cnt").textContent = r.seconds != null && r.seconds < 9999 ? fmt(r.seconds) : "–";
+    tr.querySelector(".pct").textContent = r.pct + "%";
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  container.appendChild(table);
+}
+
+function rankOf(data, name){
+  const key = name.toLowerCase();
+  const i = data.rows.findIndex(r => r.name.toLowerCase() === key);
+  return i < 0 ? null : { rank: i + 1, row: data.rows[i] };
+}
+
+/* Leaderboard view, refreshes every 8 seconds while open */
+let boardTimer = null;
+function stopBoardRefresh(){ if (boardTimer){ clearInterval(boardTimer); boardTimer = null; } }
+function loadBoardView(){
+  api.board().then(d => {
+    renderBoard($("boardViewBody"), d, "", 25);
+    $("boardViewMeta").textContent = `${d.players} ${d.players === 1 ? "player" : "players"} · updates automatically`;
+  }).catch(() => { $("boardViewMeta").textContent = "Couldn't reach the leaderboard. Retrying…"; });
+}
+function openBoardView(present){
+  show("boardView");
+  document.body.classList.toggle("present", !!present);
+  $("boardBackBtn").classList.toggle("hidden", !!present);
+  $("counter").textContent = "";
+  loadBoardView();
+  stopBoardRefresh();
+  boardTimer = setInterval(loadBoardView, 8000);
+  window.scrollTo(0,0);
+}
+function resetBoard(){
+  const code = $("resetCode").value.trim();
+  const msg = $("resetMsg");
+  msg.classList.remove("err");
+  if (!code){ msg.textContent = "Enter the admin code."; msg.classList.add("err"); return; }
+  $("resetBtn").disabled = true;
+  msg.textContent = "Resetting…";
+  api.reset(code).then(d => {
+    $("resetCode").value = "";
+    msg.textContent = "Leaderboard reset. Past scores were archived.";
+    renderBoard($("boardViewBody"), d, "", 25);
+    $("boardViewMeta").textContent = "0 players · updates automatically";
+  }).catch(e => {
+    msg.textContent = (e && e.message && /code/i.test(e.message)) ? "Incorrect code." : "Couldn't reset. Try again.";
+    msg.classList.add("err");
+  }).finally(() => { $("resetBtn").disabled = false; });
+}
+
+/* ---------- Quiz flow ---------- */
+function syncName(){
+  playerName = $("nameInput").value.trim().slice(0,24);
+  $("startBtn").disabled = !playerName;
+}
+
+function startQuiz(){
+  syncName();
+  if (!playerName){ show("start"); $("nameInput").focus(); return; }
+  document.body.classList.remove("present");
+  current = 0;
+  answers = new Array(QUESTIONS.length).fill(null);
+  timedOut = false;
+  show("quiz");
+  startTimer();
+  render();
+  window.scrollTo(0,0);
+}
+
+function startTimer(){
+  clearInterval(timerId);
+  startTime = Date.now();
+  tick();
+  timerId = setInterval(tick, 250);
+}
+function tick(){
+  const left = Math.max(0, TIME_LIMIT - Math.floor((Date.now() - startTime) / 1000));
+  $("timerText").textContent = fmt(left);
+  $("timer").classList.toggle("warn", left <= 60);
+  if (left === 0){ timedOut = true; finish(); }
+}
+function stopTimer(){
+  clearInterval(timerId); timerId = null;
+  elapsedSec = Math.min(TIME_LIMIT, Math.round((Date.now() - startTime) / 1000));
+}
+
+function render(){
+  const q = QUESTIONS[current];
+  const done = answers.filter(a => a !== null).length;
+  $("qnum").textContent = `Question ${current+1} of ${QUESTIONS.length}`;
+  $("counter").textContent = `${done} of ${QUESTIONS.length} answered`;
+  $("bar").style.width = `${done / QUESTIONS.length * 100}%`;
+
+  const opts = $("options");
+  opts.innerHTML = "";
+  q.options.forEach((text,i) => {
+    const b = document.createElement("button");
+    b.className = "opt" + (answers[current] === i ? " selected" : "");
+    b.innerHTML = `<span class="letter">${LETTERS[i]}</span><span></span>`;
+    b.lastChild.textContent = text;
+    b.onclick = () => choose(i);
+    opts.appendChild(b);
+  });
+
+  $("backBtn").style.visibility = current === 0 ? "hidden" : "visible";
+  const last = current === QUESTIONS.length - 1;
+  const nb = $("nextBtn");
+  nb.textContent = last ? "Submit Test" : "Next";
+  nb.classList.toggle("red", last);
+  nb.disabled = last ? answers.some(a => a === null) : answers[current] === null;
+
+  const dots = $("dots");
+  dots.innerHTML = "";
+  QUESTIONS.forEach((_,i) => {
+    const d = document.createElement("button");
+    d.className = "dot" + (answers[i] !== null ? " answered" : "") + (i === current ? " current" : "");
+    d.textContent = i+1;
+    d.title = `Go to question ${i+1}`;
+    d.onclick = () => { current = i; render(); };
+    dots.appendChild(d);
+  });
+}
+
+function choose(i){ answers[current] = i; render(); }
+
+function next(){
+  if (current === QUESTIONS.length - 1){
+    if (answers.every(a => a !== null)) finish();
+    return;
+  }
+  if (answers[current] === null) return;
+  current++;
+  render();
+}
+function back(){ if (current > 0){ current--; render(); } }
+
+function band(pct){
+  if (pct >= 90) return ["Grammar Pro","You could proofread the annual report."];
+  if (pct >= 70) return ["Strong Showing","Nicely done. A few tricky rules caught you."];
+  if (pct >= 45) return ["Solid Start","These rules are sneakier than they look. Check your focus area and memory tricks below."];
+  return ["Room to Grow","These rules trip up a lot of people. The memory tricks below will help fast."];
+}
+
+function finish(){
+  if ($("quiz").classList.contains("hidden")) return; // already finished
+  stopTimer();
+  showResults();
+}
+
+function showResults(){
+  const correct = answers.filter((a,i) => a === QUESTIONS[i].answer).length;
+  const total = QUESTIONS.length;
+  const pct = Math.round(correct / total * 100);
+  const [label, note] = band(pct);
+  $("timesUp").classList.toggle("hidden", !timedOut);
+  $("scorePct").innerHTML = `${pct}%<small>${correct} of ${total} correct · ${fmt(elapsedSec)}</small>`;
+  $("scoreLabel").textContent = label;
+  $("scoreNote").textContent = note;
+  $("counter").textContent = "Test complete";
+
+  // Categories in first-appearance order
+  const cats = {};
+  QUESTIONS.forEach((q,i) => {
+    cats[q.cat] = cats[q.cat] || {right:0,total:0};
+    cats[q.cat].total++;
+    if (answers[i] === q.answer) cats[q.cat].right++;
+  });
+  const rows = Object.entries(cats);
+  const body = $("catBody");
+  body.innerHTML = "";
+  rows.forEach(([name,c]) => {
+    const p = c.right / c.total;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="cat-name"></td><td><div class="bar ${p < .5 ? "low" : ""}"><div style="width:${p*100}%"></div></div></td><td class="cat-score">${c.right}/${c.total}</td>`;
+    tr.firstChild.textContent = name;
+    body.appendChild(tr);
+  });
+  const sorted = rows.slice().sort((a,b) => (b[1].right/b[1].total) - (a[1].right/a[1].total));
+  const best = sorted[0], worst = sorted[sorted.length-1];
+  $("strongest").textContent = `${best[0]} (${best[1].right}/${best[1].total})`;
+  $("focus").textContent = worst[1].right === worst[1].total ? "None. You aced every category." : `${worst[0]} (${worst[1].right}/${worst[1].total})`;
+
+  // Review
+  const rev = $("review");
+  rev.innerHTML = "";
+  QUESTIONS.forEach((q,i) => {
+    const ok = answers[i] === q.answer;
+    const d = document.createElement("div");
+    d.className = "review " + (ok ? "right" : "wrong");
+    d.dataset.ok = ok ? "1" : "0";
+    d.innerHTML = `
+      <div class="review-head">
+        <span><b>Question ${i+1}</b> &nbsp;<span class="tag"></span></span>
+        <span class="verdict ${ok ? "ok" : "no"}">${ok ? "Correct" : (answers[i] === null ? "Not answered" : "Missed")}</span>
+      </div>
+      <div class="rline"><span class="k">Your answer</span><span class="ya"></span></div>
+      ${ok ? "" : `<div class="rline"><span class="k">Correct answer</span><span class="ca"></span></div>`}
+      <div class="explain"></div>
+      <div class="trick"><b>Memory Trick</b><span class="tp"></span></div>`;
+    d.querySelector(".tag").textContent = q.cat;
+    d.querySelector(".ya").textContent = answers[i] === null ? "No answer (time ran out)" : `${LETTERS[answers[i]]}) ${q.options[answers[i]]}`;
+    if (!ok) d.querySelector(".ca").textContent = `${LETTERS[q.answer]}) ${q.options[q.answer]}`;
+    d.querySelector(".explain").textContent = q.why;
+    d.querySelector(".tp").textContent = q.tip;
+    rev.appendChild(d);
+  });
+  setFilter("all");
+
+  // Text versions for copy and email
+  const catLines = rows.map(([n,c]) => `- ${n}: ${c.right}/${c.total}`).join("\n");
+  resultText = `KM Grammar Practice Test\nNickname: ${playerName}\nScore: ${pct}% (${correct}/${total}) in ${fmt(elapsedSec)}\n\nBy category:\n${catLines}`;
+  const missed = QUESTIONS.map((q,i) => ({q,i})).filter(x => answers[x.i] !== x.q.answer);
+  const trickLines = missed.length
+    ? "\n\nMemory tricks for the ones you missed:\n" + missed.map(x => `Q${x.i+1} (${x.q.cat}): ${x.q.tip}`).join("\n")
+    : "\n\nPerfect score. No tricks needed.";
+  resultEmailBody = resultText + trickLines;
+  $("copyMsg").textContent = "";
+  updateEmailLink();
+
+  show("results");
+  window.scrollTo(0,0);
+
+  // Save score and show leaderboard
+  $("rankCallout").textContent = "Saving your score…";
+  $("boardBody").innerHTML = "";
+  $("boardMeta").textContent = "";
+  const catText = rows.map(([n,c]) => `${n} ${c.right}/${c.total}`).join("; ");
+  api.submit(playerName, correct, total, catText, elapsedSec).then(d => {
+    const me = rankOf(d, playerName);
+    const callout = $("rankCallout");
+    callout.innerHTML = "";
+    if (me){
+      callout.append("You're ");
+      const b = document.createElement("b"); b.textContent = `#${me.rank} of ${d.players}`; callout.append(b);
+      callout.append(me.row.pct > pct ? ` (your best score of ${me.row.pct}% counts).` : ".");
+    } else {
+      callout.textContent = "Score saved.";
+    }
+    $("boardMeta").textContent = `Top 10 of ${d.players} ${d.players === 1 ? "player" : "players"}. Ties go to the faster time.`;
+    renderBoard($("boardBody"), d, playerName, 10);
+  }).catch(() => {
+    $("rankCallout").textContent = "Couldn't save your score to the leaderboard. Check your connection and retake to try again.";
+  });
+}
+
+function updateEmailLink(){
+  const email = $("emailInput").value.trim();
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const btn = $("emailBtn");
+  btn.classList.toggle("disabled", !valid);
+  if (!valid){ btn.href = "#"; return; }
+  const build = body => `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("My KM Grammar Practice Test Results")}&body=${encodeURIComponent(body)}`;
+  // Keep the link short enough for Outlook on Windows; trim trick lines if needed
+  let lines = resultEmailBody.split("\n"), href = build(resultEmailBody), trimmed = false;
+  while (href.length > 1900 && lines.length > 1){
+    lines.pop(); trimmed = true;
+    href = build(lines.join("\n") + "\n(See the results page for the rest of your memory tricks.)");
+  }
+  btn.href = href;
+}
+
+function setFilter(f){
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c.dataset.f === f));
+  document.querySelectorAll(".review").forEach(r => {
+    const ok = r.dataset.ok === "1";
+    r.classList.toggle("hidden", (f === "wrong" && ok) || (f === "right" && !ok));
+  });
+}
+
+/* ---------- Wiring ---------- */
+$("startBtn").onclick = startQuiz;
+$("retakeBtn").onclick = startQuiz;
+$("nextBtn").onclick = next;
+$("backBtn").onclick = back;
+$("nameInput").addEventListener("input", syncName);
+$("nameInput").addEventListener("keydown", e => { if (e.key === "Enter" && playerName) startQuiz(); });
+$("viewBoardBtn").onclick = () => openBoardView(false);
+$("boardBackBtn").onclick = () => { show("start"); $("counter").textContent = ""; };
+$("refreshBtn").onclick = loadBoardView;
+$("resetBtn").onclick = resetBoard;
+$("resetCode").addEventListener("keydown", e => { if (e.key === "Enter") resetBoard(); });
+$("emailInput").addEventListener("input", updateEmailLink);
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => setFilter(c.dataset.f));
+$("copyBtn").onclick = async () => {
+  try { await navigator.clipboard.writeText(resultEmailBody); $("copyMsg").textContent = "Results copied."; }
+  catch(e){ $("copyMsg").textContent = "Copy isn't available here. Use Email My Results instead."; }
+};
+
+document.addEventListener("keydown", e => {
+  if ($("quiz").classList.contains("hidden")) return;
+  const k = e.key.toUpperCase();
+  const idx = LETTERS.indexOf(k);
+  if (idx > -1 && idx < QUESTIONS[current].options.length){ choose(idx); }
+  else if (e.key === "Enter"){ e.preventDefault(); next(); }
+  else if (e.key === "ArrowLeft"){ back(); }
+  else if (e.key === "ArrowRight" && answers[current] !== null && current < QUESTIONS.length-1){ next(); }
+});
+
+// Presenter link: add ?view=board to the quiz URL for a large, auto-updating leaderboard
+if (new URLSearchParams(location.search).get("view") === "board") openBoardView(true);
+</script>
+</body>
+</html>
