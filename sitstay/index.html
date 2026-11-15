@@ -715,7 +715,7 @@ function gameHeight(now){ const u = (now - A.game.jumpAt)/JUMP_MS; return u >= 0
 function gameStep(now, fdt){
   const g = A.game; if(!g || g.over) return;
   if(!g.began){ if(now - g.start > 12000){ A.game = null; render(); } return; }   // never tapped: quietly quit
-  if(!g.speed){ g.speed = 0.033*LW/48; g.next = LW + 4; }
+  if(!g.speed){ g.speed = 0.028*LW/48; g.maxSpeed = g.speed*1.7; g.next = LW + 4; }
   const dx = g.speed*fdt; g.world += dx;
   g.hurdles.forEach(h => h.x -= dx);
   g.next -= dx;
@@ -723,7 +723,7 @@ function gameStep(now, fdt){
   const bx = LW*0.28, hy = gameHeight(now), d = day();
   for(const h of g.hurdles){
     if(!h.done && h.x < bx - S(17)){
-      h.done = true; g.cleared++; g.speed *= 1.035;
+      h.done = true; g.cleared++; g.speed = Math.min(g.maxSpeed, g.speed*1.025);
       d.gamePts = d.gamePts || 0;
       if(d.gamePts < GAME_PTS_MAX){ d.gamePts++; g.earned++; }
     } else if(!h.done && Math.abs(h.x - bx) < S(7) && hy + S(3) < HURDLE_H() + 1){   // S(3): tucked legs
@@ -999,7 +999,9 @@ const SP = {
 const mk = document.createElement('canvas'), mctx = mk.getContext('2d', {willReadFrequently:true});
 const SC = 0.46; // finer LCD grid (66 cols, was 48) and a slightly bigger pup: ~50% more pixels per side so accessories read
 const petLook = () => Object.assign({}, LOOK0, store.pet && store.pet.look);
-const pupScale = () => SC * petLook().size;
+// Bort shrinks to 60% for Hurdles so the jumps are forgiving; S() offsets and the hit zone shrink with him.
+const GAME_SCALE = 0.6;
+const pupScale = () => SC * petLook().size * (A.game && store.mode !== 'playing' ? GAME_SCALE : 1);
 // Scene offsets were tuned for the old 0.4 size; S() keeps props lined up with the pup's current size.
 const S = n => Math.round(n * pupScale() / 0.4);
 // Fixed scene distances (jump heights) were tuned on the old 48-column grid; G() keeps them the same on screen.
