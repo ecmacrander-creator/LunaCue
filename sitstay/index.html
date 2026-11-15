@@ -62,6 +62,14 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
 .burst.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
 @keyframes pop{0%{transform:translateX(-50%) scale(.3);opacity:0}100%{transform:translateX(-50%) scale(1);opacity:1}}
 body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
+.keys{display:flex;justify-content:center;gap:22px;margin-top:9px}
+.key{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;padding:0;cursor:pointer;font-family:var(--font-display);font-size:.62rem;letter-spacing:.04em;color:rgba(255,255,255,.92)}
+.key i{display:block;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff7d6,#f2c94c 55%,#c7952a);box-shadow:0 3px 0 rgba(60,20,100,.45),inset 0 -2px 3px rgba(0,0,0,.18)}
+.key:active i{transform:translateY(2px);box-shadow:0 1px 0 rgba(60,20,100,.45),inset 0 -2px 3px rgba(0,0,0,.18)}
+.key:disabled{opacity:.4;cursor:default}
+.key:disabled i{transform:none}
+.key:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:10px}
+body.dim .keys{visibility:hidden}
 .brand{font-family:var(--font-display);font-weight:700;color:rgba(255,255,255,.85);font-size:.8rem;letter-spacing:.06em;text-align:center;margin-top:6px}
 .toast{position:absolute;left:8px;right:8px;bottom:8px;background:var(--lcd-on);color:var(--lcd);font-family:var(--font-display);font-size:.78rem;text-align:center;padding:8px 10px;border-radius:8px}
 .status{font-weight:800;font-size:.9rem;text-align:center;margin:0;min-height:1.3em}
@@ -177,6 +185,11 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <canvas id="scene" aria-label="Bort the pixel puppy"></canvas>
       <div class="toast" id="toast" hidden></div>
       <div class="burst" id="burst" hidden><b id="burstN">+0</b><span id="burstL">Good dog points</span><small id="burstS" hidden></small></div>
+    </div>
+    <div class="keys" role="group" aria-label="Play with Bort between focus sessions">
+      <button class="key" id="pTreat"><i></i>Treat</button>
+      <button class="key" id="pTrick"><i></i>Trick</button>
+      <button class="key" id="pRub"><i></i>Belly rub</button>
     </div>
     <div class="brand" id="brand">BORT</div>
   </div>
@@ -453,7 +466,7 @@ document.addEventListener('pointerdown', () => { if(store.mode === 'playing') re
 setInterval(() => { if(store.mode === 'playing' && document.visibilityState === 'visible' && (!wake || (awakeVid && awakeVid.paused))) requestWake(); }, 20000);
 
 /* ---------- focus + care logic ---------- */
-const A = {danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
+const A = {play:null, playStart:0, playUntil:0, playMsg:'', playTrick:0, lastTrick:-1, danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
 
 function rollover(){
   if(store.day && store.day !== todayKey()){
@@ -618,14 +631,14 @@ function startDay(){
   if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; greet(10*MIN, Date.now()); showToast('Good morning! '+PUP+' wants breakfast. Tap Feed.'); }
   else if(sinceFun(Date.now()) >= RESTLESS*DAY) showToast(PUP+' is restless. Finish an activity today.');
   d.sessions = (d.sessions || 0) + 1;
-  d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
+  A.playUntil = 0; d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
 }
 function takeBreak(){
   if(store.mode === 'free') ping('free', 0, '');
   const d = day(); d.streakMs = 0; resetProgress(d); store.mode = 'break'; releaseWake(); ping('away', 0, ''); save(); render();
   showToast('Focus session ended. Unfinished activities start over next session.');
 }
-function backToWork(){ const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
+function backToWork(){ A.playUntil = 0; const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
 function startFree(){
   const d = day(); if(store.mode !== 'playing' || d.freeUsed) return;
   d.freeUsed = true; store.mode = 'free'; store.freeStart = Date.now(); releaseWake();
@@ -640,6 +653,51 @@ function endFree(now, returning){
 }
 function endDay(){ if(store.mode === 'free') ping('free', 0, ''); ping('away', 0, ''); ageUp(todayKey()); const d = day(); d.ended = true; d.streakMs = 0; store.mode = 'ended'; releaseWake(); save(); render(); openSummary(); }
 function resumeDay(){ const d = day(); d.ended = false; store.mode = 'playing'; store.day = todayKey(); store.lastTick = Date.now(); requestWake(); save(); closeSheet('#summary'); render(); }
+/* Between-session play: quick, free, no effect on scores. Off during focus so it can't become a distraction. */
+const canPlay = () => !store.pet.dead && store.mode !== 'playing' && Date.now() >= A.playUntil && Date.now() >= A.eatUntil;
+const TREAT_MAX = 5;
+const PETS = ['Bort melts into a puddle.', 'Bort does the leg kick.', 'Bort grunts happily.', 'Best. Rub. Ever.'];
+function play(kind){
+  if(!canPlay()) return;
+  const now = Date.now(), d = day();
+  A.play = kind; A.playStart = now; A.playMsg = '';
+  if(kind === 'treat'){
+    d.treats = d.treats || 0;
+    if(d.treats >= TREAT_MAX){ A.play = 'full'; A.playUntil = now + 2200; A.playMsg = PUP+' is stuffed. Treats are back tomorrow.'; render(); return; }
+    d.treats++; A.playUntil = now + 3000; A.playMsg = PUP+' caught the treat! ('+(TREAT_MAX - d.treats)+' left today)';
+    setTimeout(() => { beep(SFX.tick); buzz(30); }, 900);
+  } else if(kind === 'trick'){
+    const list = TRICKS.concat(store.pet.tricks || []);
+    let i; do { i = Math.floor(Math.random()*list.length); } while(list.length > 1 && i === A.lastTrick);
+    A.lastTrick = i; A.playTrick = i; A.playUntil = now + ACTS.tricks.T;
+    setTimeout(() => beep(SFX.hello), ACTS.tricks.T*0.8);
+  } else {
+    A.playUntil = now + 3200; A.playMsg = PETS[Math.floor(Math.random()*PETS.length)];
+    beep(SFX.hello); buzz([20,40,20,40,20]);
+  }
+  save(); dirty = true; render();
+}
+function drawPlay(now){
+  const rt = now - A.playStart, x = Math.round(LW*0.45);
+  if(A.play === 'trick'){ drawTricks(Math.min(rt, ACTS.tricks.T - 1), A.playTrick); return; }
+  backdrop(0);
+  const wag = Math.sin(now*0.05);
+  if(A.play === 'full'){ bort(x, GY-1, {pose:'lie', wag:wag*0.3}); spr(SP.z, x + S(14), GY - S(22)); return; }
+  if(A.play === 'treat'){
+    const catchAt = 900;
+    const m = bort(x, GY-1, {pose:'sit', wag, tilt: rt < catchAt ? -0.25 : 0, item: rt >= catchAt && rt < 1900 ? 'bone' : null, tongue: rt >= 1900});
+    if(rt < catchAt){ const u = rt/catchAt, ty = Math.round(lerp(-3, m.y - 1, u*u)); spr(SP.bone, m.x - 1, ty); }
+    if(rt >= 1200 && rt < 1900 && Math.floor(rt/150) % 2) { px(m.x+3, m.y-3); px(m.x+4, m.y-4); }   // crumbs
+    if(rt >= 1900){ const hy = GY - S(36) - Math.round((rt-1900)*0.008); spr(SP.heart, x + S(8), hy); }
+    return;
+  }
+  // belly rub: on his back, wiggling, eyes shut, hearts drifting up
+  const wig = Math.floor(rt/220) % 2;
+  bort(x + (wig ? 1 : 0), GY-1, {pose:'lie', flipV:true, sleep:true, wag, face: Math.floor(rt/1100) % 2 ? -1 : 1});
+  for(let i=0;i<2;i++){ const ph = ((rt*0.0006) + i/2) % 1; spr(SP.heart, x - S(6) + i*S(14) + Math.round(Math.sin(rt*0.005+i)*2), GY - S(18) - Math.round(ph*S(22))); }
+  const hx = x + S(4) + Math.round(Math.sin(rt*0.02)*S(5)), hy = GY - S(16);   // a hand doing the rubbing
+  hline(hx-2, hx+2, hy); hline(hx-2, hx+2, hy+1); px(hx-3, hy+2); px(hx-1, hy+2); px(hx+1, hy+2); px(hx+3, hy+2);
+}
 function setActivity(a){ store.activity = a; A.t = 0; A.lastCycle = 0; save(); render(); }
 function feed(){
   const d = day(); if(!d.hungry) return;
@@ -720,7 +778,7 @@ function collected(){
 // Draw a small pup with a given look/accessory into its own canvas; locked items are a solid silhouette.
 function miniPup(look, wear, locked){
   const sv = {LW, LH, buf, bx:A.bx, bf:A.bf, look:store.pet.look, wear:store.pet.wear, hop:A.hopStart};
-  LW = 40; LH = 30; buf = new Uint8Array(LW*LH); mk.width = LW; mk.height = LH;
+  LW = 60; LH = 54; buf = new Uint8Array(LW*LH); mk.width = LW; mk.height = LH;
   store.pet.look = look; store.pet.wear = wear; A.hopStart = -1e9;
   try{ bort(LW*0.36, LH-2, {tongue:false}); }
   finally{ store.pet.look = sv.look; store.pet.wear = sv.wear; A.hopStart = sv.hop; A.bx = sv.bx; A.bf = sv.bf; }
@@ -732,7 +790,7 @@ function miniPup(look, wear, locked){
     for(let i=0;i<w*h;i++) if(!out[i]) b[i] = 1;
   }
   LW = sv.LW; LH = sv.LH; buf = sv.buf; mk.width = LW; mk.height = LH;
-  const c = document.createElement('canvas'), Px = 4; c.width = w*Px; c.height = h*Px;
+  const c = document.createElement('canvas'), Px = 3; c.width = w*Px; c.height = h*Px;
   const g = c.getContext('2d'); g.fillStyle = C.lcd; g.fillRect(0,0,c.width,c.height);
   g.fillStyle = locked ? 'rgba(37,48,27,.35)' : C.on;
   for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(b[y*w+x]) g.fillRect(x*Px, y*Px, Px-1, Px-1);
@@ -832,7 +890,7 @@ function resize(){
   const r = cv.parentElement.getBoundingClientRect(); DPR = Math.min(window.devicePixelRatio || 1, 2);
   W = r.width; H = r.height; cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled = false;
-  P = Math.max(3, Math.floor(W/48)); LW = Math.floor(W/P); LH = Math.floor(H/P);
+  P = Math.max(3, Math.floor(W/66)); LW = Math.floor(W/P); LH = Math.floor(H/P);
   OX = Math.floor((W - LW*P)/2); OY = Math.floor((H - LH*P)/2);
   GY = Math.max(34, Math.floor(LH*0.78)); buf = new Uint8Array(LW*LH); mk.width = LW; mk.height = LH; buildGhost(); dirty = true;
 }
@@ -886,11 +944,13 @@ const SP = {
 };
 /* Bort, an original chihuahua mix: drawn as a vector silhouette, then rasterized to an LCD pixel outline. */
 const mk = document.createElement('canvas'), mctx = mk.getContext('2d', {willReadFrequently:true});
-const SC = 0.3; // was 0.4: smaller pup, more room for the activity
+const SC = 0.46; // finer LCD grid (66 cols, was 48) and a slightly bigger pup: ~50% more pixels per side so accessories read
 const petLook = () => Object.assign({}, LOOK0, store.pet && store.pet.look);
 const pupScale = () => SC * petLook().size;
 // Scene offsets were tuned for the old 0.4 size; S() keeps props lined up with the pup's current size.
 const S = n => Math.round(n * pupScale() / 0.4);
+// Fixed scene distances (jump heights) were tuned on the old 48-column grid; G() keeps them the same on screen.
+const G = n => Math.round(n * LW / 48);
 function bortBase(cx, foot, o){
   const g = mctx, face = (o.face || 1), rot = o.flipV ? Math.PI : (o.rot || 0);
   g.setTransform(1,0,0,1,0,0);
@@ -960,18 +1020,56 @@ function bortFace(o, head){
   if(L.snout === 'long'){ g.beginPath(); g.ellipse(25,3,3.8,3.2,0,0,Math.PI*2); g.fill(); }
   else { g.beginPath(); g.ellipse(20,2.5,3.8,3.2,0,0,Math.PI*2); g.fill(); }
   g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(-8,9); g.lineTo(-1,12.5); g.stroke();
-  const wear = !o.noWear && store.pet && store.pet.wear;
-  const poly = pts => { g.beginPath(); g.moveTo(pts[0],pts[1]); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i],pts[i+1]); g.closePath(); g.fill(); };
-  if(wear === 'bandana') poly([-12,9, 3,13, -6,21]);
-  else if(wear === 'hat'){ poly([-12,-12, 0,-14, -5,-31]); g.beginPath(); g.arc(-5,-32,2.6,0,Math.PI*2); g.fill(); }
-  else if(wear === 'shades'){ g.fillRect(0,-7,12,6); g.lineWidth = 2; g.beginPath(); g.moveTo(0,-5); g.lineTo(-9,-3); g.stroke(); }
-  else if(wear === 'crown') poly([-13,-12, -1,-14, 0,-23, -3,-18, -6,-24, -9,-18, -13,-22]);
-  else if(wear === 'tophat'){ g.fillRect(-14,-16,15,3); g.fillRect(-11,-30,9,15); }
-  else if(wear === 'bowtie'){ poly([-13,10, -6,15, -13,20]); poly([1,10, -6,15, 1,20]); }
-  else if(wear === 'flower'){ for(const [fx,fy] of [[-10,-19],[-6,-15],[-14,-15],[-10,-11]]){ g.beginPath(); g.arc(fx,fy,2.6,0,Math.PI*2); g.fill(); } }
-  else if(wear === 'halo'){ g.lineWidth = 2.6; g.beginPath(); g.ellipse(-4,-38,10,2.8,0,0,Math.PI*2); g.stroke(); }
   g.restore();
   return eye;
+}
+/* Accessories get their own pass: first the solid shape clears whatever outline is behind it,
+   then the ink pass draws it with cut-out details (stripes, lenses, gems) so they read at LCD size. */
+function bortWear(o, head, ink){
+  const wear = !o.noWear && store.pet && store.pet.wear; if(!wear) return false;
+  const g = mctx;
+  g.save(); g.translate(head.x, head.y); g.rotate(head.t);
+  const poly = pts => { g.beginPath(); g.moveTo(pts[0],pts[1]); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i],pts[i+1]); g.closePath(); g.fill(); };
+  const dot = (x,y,r) => { g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill(); };
+  const cut = fn => { if(!ink) return; g.save(); g.globalCompositeOperation = 'destination-out'; g.lineWidth = 2.6; g.lineCap = 'butt'; fn(); g.restore(); };
+  const cline = (x0,y0,x1,y1) => { g.beginPath(); g.moveTo(x0,y0); g.lineTo(x1,y1); g.stroke(); };
+  if(wear === 'bandana'){
+    poly([-15,7, 5,12, -7,26]);                 // scarf triangle hanging under the chin
+    poly([-15,7, -22,4, -20,12]);               // knot tails behind the neck
+    cut(() => { dot(-7,13,1.6); dot(-6,19.5,1.6); });   // polka dots
+  } else if(wear === 'hat'){
+    poly([-16,-10, 4,-15, -6,-38]);
+    dot(-6,-40,4.2);                            // pom-pom
+    cut(() => cline(-13,-21, 1,-24));           // one stripe
+  } else if(wear === 'shades'){
+    g.beginPath(); g.roundRect ? g.roundRect(0,-8,10,7.5,2) : g.rect(0,-8,10,7.5); g.fill();   // near lens
+    g.fillRect(12,-7,5,6);                      // far lens peeking past the snout
+    g.fillRect(9,-6,4,2.2);                     // bridge
+    g.lineWidth = 2.4; g.beginPath(); g.moveTo(0,-5); g.lineTo(-10,-3); g.stroke();   // arm to the ear
+    cut(() => { g.lineWidth = 1.8; cline(3,-6.5, 6,-3.5); });           // glint
+  } else if(wear === 'crown'){
+    poly([-15,-11, 2,-15, 3,-27, -1,-21, -6,-30, -10,-21, -15,-26]);
+    cut(() => { dot(-11,-14.5,1.5); dot(-6,-15.5,1.5); dot(-1,-16,1.5); });   // gems in the band
+    if(ink){ dot(-6,-31.5,2); dot(3,-28.5,1.6); dot(-15,-27.5,1.6); }       // ball tips
+  } else if(wear === 'tophat'){
+    g.fillRect(-17,-17,21,3.5);                 // brim
+    g.fillRect(-13,-37,13,21);                  // crown
+    cut(() => { g.fillRect(-13,-22.5,13,2.6); });                      // hat band
+  } else if(wear === 'bowtie'){
+    poly([-16,9, -7,14.5, -16,21]); poly([2,9, -7,14.5, 2,21]);
+    dot(-7,14.5,3.2);                           // knot
+    cut(() => { g.lineWidth = 1.6; cline(-10.5,10, -10.5,19); cline(-3.5,10, -3.5,19); });   // pleat gap around the knot
+  } else if(wear === 'flower'){
+    for(let i=0;i<5;i++){ const t = i*Math.PI*2/5 - Math.PI/2; dot(-11 + Math.cos(t)*4.6, -17 + Math.sin(t)*4.6, 3); }
+    cut(() => dot(-11,-17,2.6));
+    if(ink) dot(-11,-17,1.3);                   // center
+    g.lineWidth = 2; g.beginPath(); g.moveTo(-9,-12); g.lineTo(-6,-7); g.stroke();   // stem
+  } else if(wear === 'halo'){
+    g.lineWidth = 3.4; g.beginPath(); g.ellipse(-4,-40,11,3.2,0,0,Math.PI*2); g.stroke();
+    if(ink){ g.fillRect(8,-47,1.8,5.4); g.fillRect(6.3,-45.2,5.4,1.8); }   // twinkle
+  }
+  g.restore();
+  return true;
 }
 function bort(cx, foot, o){
   o = o || {};
@@ -981,7 +1079,7 @@ function bort(cx, foot, o){
   const g = mctx;
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH); g.fillStyle = '#000'; g.strokeStyle = '#000';
   bortBase(cx, foot, o); const info = bortShape(o);
-  const x0 = Math.max(1, Math.round(cx) - 30), x1 = Math.min(LW-2, Math.round(cx) + 30), y0 = Math.max(1, Math.round(foot) - 44), y1 = Math.min(LH-2, Math.round(foot) + 4);
+  const x0 = Math.max(1, Math.round(cx) - 40), x1 = Math.min(LW-2, Math.round(cx) + 40), y0 = Math.max(0, Math.round(foot) - 58), y1 = Math.min(LH-2, Math.round(foot) + 6);
   let d = g.getImageData(0,0,LW,LH).data;
   const inside = i => d[i*4+3] > 110;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(inside(i) && (!inside(i-1) || !inside(i+1) || !inside(i-LW) || !inside(i+LW))) buf[i] = 1; }
@@ -989,6 +1087,14 @@ function bort(cx, foot, o){
   bortBase(cx, foot, o); bortMarks(o); const eye = bortFace(o, info.head);
   d = g.getImageData(0,0,LW,LH).data;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100) buf[i] = 1; }
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH); bortBase(cx, foot, o);
+  if(bortWear(o, info.head, false)){
+    d = g.getImageData(0,0,LW,LH).data;
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100) buf[i] = 0; }
+    g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH); bortBase(cx, foot, o); bortWear(o, info.head, true);
+    d = g.getImageData(0,0,LW,LH).data;
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100) buf[i] = 1; }
+  }
   if(eye && !(store.pet && store.pet.wear === 'shades')){ const ex = Math.floor(eye.x - 0.5), ey = Math.floor(eye.y - 0.5), dot = petLook().mark === 'eyepatch' ? off : px; dot(ex,ey); dot(ex+1,ey); dot(ex,ey+1); dot(ex+1,ey+1); }
   const m = {x:Math.round(info.mouth.x), y:Math.round(info.mouth.y)};
   if(o.item === 'ball') ball(m.x, m.y);
@@ -1001,7 +1107,7 @@ const RUN = on => on ? STEP() : undefined;
 function ball(x,y){ px(x,y); px(x+1,y); px(x,y+1); px(x+1,y+1); }
 
 function backdrop(scroll){
-  spr(SP.sun, LW - 10, 3);
+  spr(SP.sun, 14, 2);   // top left, next to the bowl; hearts live top right so tall hats don't collide
   for(let i=0;i<2;i++){
     const span = LW + 14, x = ((i*LW*0.55 + 4 - A.cloud - scroll*0.15) % span + span) % span - 10;
     spr(SP.cloud, x, 9 + i*7);
@@ -1028,7 +1134,7 @@ function sparkleLayer(now){
 function happiness(){ const d = day(); let h = 4; if(d.hungry) h--; h -= Math.min(2, d.poops); if(d.leaves >= 3) h--; return Math.max(0, h); }
 function careLayer(now){
   const d = day();
-  const hp = happiness(), hx = Math.round(LW/2 - 12);
+  const hp = happiness(), hx = LW - 27;
   for(let i=0;i<4;i++) spr(i < hp ? SP.heart : SP.heartO, hx + i*6, 2);
   // happy meter under the hearts: fills with focus time, dance when full
   if(store.mode === 'playing'){ const f = Math.round(22*((d.focusMs % HAPPY)/HAPPY)); for(let x=0;x<=22;x++) if(x <= f || x % 2 === 0) px(hx + x, 8); }
@@ -1086,7 +1192,7 @@ function drawTricks(p, cyc){
       case 'Spin!': o.face = Math.floor(k*8) % 2 ? -1 : 1; break;
       case 'High five!': o.pose = 'sit'; o.paw = k > 0.2; break;
       case 'Roll over!': { const f = Math.floor(k*6) % 4; o.pose = 'lie'; o.flipV = f === 1 || f === 2; o.face = f >= 2 ? -1 : 1; break; }
-      case 'Jump!': y = GY-1 - Math.round(Math.sin(k*Math.PI)*10); o.tuck = true; break;
+      case 'Jump!': y = GY-1 - Math.round(Math.sin(k*Math.PI)*G(10)); o.tuck = true; break;
       case 'Shake!': o.pose = 'sit'; o.paw = Math.floor(k*10) % 2 === 0; break;
       case 'Play dead!': o.pose = 'lie'; o.flipV = k > 0.15; o.sleep = k > 0.15; o.tongue = false; break;
       case 'Moonwalk!': x = LW*0.5 - Math.sin(k*Math.PI*2)*LW*0.2; o.step = Math.floor(A.t/220) % 2 === 1; break;
@@ -1118,7 +1224,7 @@ function drawBubbles(p, cyc){
   const bx = tx + face*S(9), by = lerp(4, GY-S(34), ease(p/1800));
   if(p < 2050) spr(SP.bubble, bx-2, by-2); else if(p < 2450) spr(SP.pop, bx-2, by-2);
   const x = lerp(prev, tx, ease(p/1700));
-  let y = GY-1; if(p > 1750 && p < 2300) y = GY-1 - Math.round(Math.sin(Math.PI*(p-1750)/550)*7);
+  let y = GY-1; if(p > 1750 && p < 2300) y = GY-1 - Math.round(Math.sin(Math.PI*(p-1750)/550)*G(7));
   bort(x, y, {face, step:RUN(p < 1700), tuck:y < GY-1, tongue:true});
 }
 function drawDig(p){
@@ -1155,14 +1261,14 @@ function drawTug(){
 }
 function drawAgility(){
   backdrop(A.world);
-  const sp = ACTS.agility.T*0.02, dx = LW*0.4, n0 = Math.floor(A.world/sp) - 1;
+  const sp = G(ACTS.agility.T*0.02), dx = LW*0.4, n0 = Math.floor(A.world/sp) - 1;
   for(let n=n0;n<n0+Math.ceil(LW/sp)+2;n++){
     const hx = Math.round(n*sp - A.world + sp*0.5);
-    vline(hx-3, GY-7, GY-1); vline(hx+3, GY-7, GY-1); hline(hx-3, hx+3, GY-6);
+    vline(hx-G(3), GY-G(7), GY-1); vline(hx+G(3), GY-G(7), GY-1); hline(hx-G(3), hx+G(3), GY-G(6));
   }
   let rel = ((A.world + dx - sp*0.5) % sp + sp) % sp; if(rel > sp/2) rel -= sp;
-  const zone = 8, air = Math.abs(rel) < zone;
-  const y = air ? GY-1 - Math.round(Math.cos(rel/zone*Math.PI/2)*10) : GY-1;
+  const zone = G(8), air = Math.abs(rel) < zone;
+  const y = air ? GY-1 - Math.round(Math.cos(rel/zone*Math.PI/2)*G(10)) : GY-1;
   bort(dx, y, {step:RUN(!air), tuck:air, tongue:true});
 }
 function drawButterfly(p){
@@ -1176,8 +1282,8 @@ function drawButterfly(p){
 function drawReturn(now){
   backdrop(0);
   const rt = now - A.returnStart, lvl = A.returnLevel || 1, wx = Math.round(LW*0.78);
-  vline(wx, GY-30, GY-1); hline(wx, LW-1, GY-30);
-  vline(wx+4, GY-18, GY-1); vline(wx+13, GY-18, GY-1); hline(wx+4, wx+13, GY-18); px(wx+11, GY-9);
+  vline(wx, GY-S(30), GY-1); hline(wx, LW-1, GY-S(30));
+  vline(wx+S(4), GY-S(18), GY-1); vline(wx+S(13), GY-S(18), GY-1); hline(wx+S(4), wx+S(13), GY-S(18)); px(wx+S(11), GY-S(9));
   const wag = Math.sin(now*0.07)*1.4; // tail going wild
   if(rt < 700){ bort(wx - S(12), GY-1, {pose:'sit', wag, tongue:true}); spr(SP.ex, wx - S(12) + S(6), GY - S(36)); return; }
   const k = rt - 700, u = clamp(k/Math.max(1, A.returnUntil - A.returnStart - 700));
@@ -1257,14 +1363,14 @@ function drawGone(now){
 }
 function drawKennel(now){
   backdrop(0);
-  const dx = Math.round(LW*0.5), x0 = dx - 15, x1 = dx + 15, wall = GY - 18, peak = GY - 30;
+  const dx = Math.round(LW*0.5), x0 = dx - S(15), x1 = dx + S(15), wall = GY - S(18), peak = GY - S(30), dw = S(6), dh = S(12);
   bort(dx - S(10), GY-1, {pose:'lie', sleep:true});
-  for(let y=peak-24;y<GY;y++) for(let x=x0-16;x<=x1+3;x++){ const inDoor = x > dx-6 && x < dx+6 && y > GY-12; if(!inDoor) off(x,y); }
+  for(let y=Math.max(9, peak-S(24));y<GY;y++) for(let x=x0-S(16);x<=x1+3;x++){ const inDoor = x > dx-dw && x < dx+dw && y > GY-dh; if(!inDoor) off(x,y); }
   vline(x0, wall, GY-1); vline(x1, wall, GY-1);
   line(x0-3, wall+1, dx, peak); line(dx, peak, x1+3, wall+1); hline(x0-3, x1+3, wall+1);
-  vline(dx-6, GY-10, GY-1); vline(dx+6, GY-10, GY-1); hline(dx-4, dx+4, GY-12); px(dx-5, GY-11); px(dx+5, GY-11);
-  hline(dx-3, dx+3, GY-15);
-  for(let i=0;i<2;i++){ const ph = ((now*0.0004) + i/2) % 1; spr(SP.z, dx + 8 + Math.round(ph*5), peak - 4 - Math.round(ph*9)); }
+  vline(dx-dw, GY-dh+2, GY-1); vline(dx+dw, GY-dh+2, GY-1); hline(dx-dw+2, dx+dw-2, GY-dh); px(dx-dw+1, GY-dh+1); px(dx+dw-1, GY-dh+1);
+  hline(dx-S(3), dx+S(3), GY-S(15));
+  for(let i=0;i<2;i++){ const ph = ((now*0.0004) + i/2) % 1; spr(SP.z, dx - S(14) - Math.round(ph*5), peak - 2 - Math.round(ph*9)); }   // left of the roof, clear of the hearts
 }
 function drawSleep(now){
   backdrop(0);
@@ -1300,6 +1406,7 @@ function frame(){
     if(store.mode !== 'playing' || store.activity == null) A.caption = '';
     if(store.pet.dead) (store.pet.cause === 'ran' ? drawGone : drawGrave)(now);
     else if(eating) drawEat(now);
+    else if(store.mode !== 'playing' && now < A.playUntil) drawPlay(now);
     else if(store.mode === 'playing'){
       if(returning) drawReturn(now);
       else if(partying) drawParty(now);
@@ -1339,6 +1446,8 @@ function render(){
   else st = ACTS[a].name+' · '+(A.caption || plural(d.actCount[a] || 0, ACTS[a].unit));
   const fun = sinceFun(Date.now());
   if(!store.pet.dead && fun >= RESTLESS*DAY && m !== 'playing'){ const left = Math.max(1, Math.ceil((RUNAWAY*DAY - fun)/DAY)); st = PUP+' is restless: no enrichment in '+Math.floor(fun/DAY)+' days. Finish one within '+left+(left === 1 ? ' day' : ' days')+' or '+PUP+' may run away.'; }
+  const playing = store.mode !== 'playing' && Date.now() < A.playUntil;
+  if(playing && !store.pet.dead) st = A.play === 'trick' ? (A.caption ? PUP+': '+A.caption : PUP+' is getting ready...') : A.playMsg;
   if(store.pet.dead) st = store.pet.cause === 'ran' ? PUP+' ran away. Adopt a new puppy.' : PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
   const sk = streak();
@@ -1356,6 +1465,8 @@ function render(){
     b.querySelector('.fill').style.width = Math.min(100, ms/GOAL*100) + '%';
     b.querySelector('.meta').textContent = done ? 'Done ✓' : Math.floor(ms/MIN) + ' / 30 min';
   });
+  const keysOff = store.pet.dead || m === 'playing';
+  ['#pTreat','#pTrick','#pRub'].forEach(id => { const k = $(id); k.disabled = keysOff || playing; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
   const fr = $('#free');
   fr.disabled = !(m === 'free' || (m === 'playing' && !d.freeUsed));
   fr.textContent = m === 'free' ? 'End break' : d.freeUsed ? 'Break used' : 'Free break';
@@ -1375,6 +1486,9 @@ function render(){
 $('#primary').addEventListener('click', () => { if(store.pet.dead){ openDead(); return; } const m = store.mode; if(m === 'idle') startDay(); else if(m === 'playing' || m === 'free') takeBreak(); else if(m === 'break') backToWork(); else openSummary(); });
 $('#secondary').addEventListener('click', () => { if(store.mode === 'ended') resumeDay(); else if(store.mode !== 'idle') endDay(); });
 $('#feed').addEventListener('click', feed);
+$('#pTreat').addEventListener('click', () => play('treat'));
+$('#pTrick').addEventListener('click', () => play('trick'));
+$('#pRub').addEventListener('click', () => play('rub'));
 $('#vet').addEventListener('click', vet);
 $('#rest').addEventListener('click', layToRest);
 $('#adoptGo').addEventListener('click', adopt);
