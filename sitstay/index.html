@@ -1020,15 +1020,6 @@ function backdrop(scroll){
 }
 SP.spark = [".#.","###",".#."];
 SP.spark2 = ["#.#",".#.","#.#"];
-function progressLayer(){
-  if(store.mode !== 'playing') return;
-  const d = day(), a = currentAct(); if(d.done[a]) return;
-  const k = clamp((d.actMs[a] || 0)/GOAL), y = LH - 3, x0 = 3, x1 = LW - 4;
-  for(let yy=y-3; yy<=y+1; yy++) for(let x=x0-1; x<=x1+1; x++) off(x, yy);
-  hline(x0, x1, y-1); hline(x0, x1, y+1); px(x0-1, y); px(x1+1, y);
-  hline(x0, Math.round(x0 + (x1-x0)*k), y);
-  for(const m of [10,20,25]) px(Math.round(x0 + (x1-x0)*m/30), y-2);
-}
 function sparkleLayer(now){
   if(now >= A.sparkUntil) return;
   const cy = A.bf - S(16), r = S(14) + Math.floor((A.sparkUntil - now)/400);
@@ -1318,7 +1309,7 @@ function frame(){
     } else if(store.mode === 'ended') drawKennel(now);
     else if(store.mode === 'free') drawSleep(now);
     else drawSleep(now);
-    if(!store.pet.dead){ careLayer(now); progressLayer(); sparkleLayer(now); }
+    if(!store.pet.dead){ careLayer(now); sparkleLayer(now); }
     if(partying && now - A.partyStart < 600 && Math.floor((now - A.partyStart)/100) % 2 === 0) for(let i=0;i<buf.length;i++) buf[i] ^= 1;
     present();
   }
