@@ -200,6 +200,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <button class="btn" id="pTreat" disabled>Treat</button>
     <button class="btn" id="pTrick" disabled>Trick</button>
     <button class="btn" id="pDance" disabled>Dance</button>
+    <button class="btn" id="pGame" disabled>Hurdles</button>
   </div>
   <div class="actions">
     <button class="btn primary" id="primary">Start day</button>
@@ -459,7 +460,7 @@ document.addEventListener('pointerdown', () => { if(store.mode === 'playing') re
 setInterval(() => { if(store.mode === 'playing' && document.visibilityState === 'visible' && (!wake || (awakeVid && awakeVid.paused))) requestWake(); }, 20000);
 
 /* ---------- focus + care logic ---------- */
-const A = {play:null, playStart:0, playUntil:0, playMsg:'', playTrick:0, lastTrick:-1, danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
+const A = {game:null, play:null, playStart:0, playUntil:0, playMsg:'', playTrick:0, lastTrick:-1, danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
 
 function rollover(){
   if(store.day && store.day !== todayKey()){
@@ -624,14 +625,14 @@ function startDay(){
   if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; greet(10*MIN, Date.now()); showToast('Good morning! '+PUP+' wants breakfast. Tap Feed.'); }
   else if(sinceFun(Date.now()) >= RESTLESS*DAY) showToast(PUP+' is restless. Finish an activity today.');
   d.sessions = (d.sessions || 0) + 1;
-  A.playUntil = 0; d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
+  A.playUntil = 0; A.game = null; d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
 }
 function takeBreak(){
   if(store.mode === 'free') ping('free', 0, '');
   const d = day(); d.streakMs = 0; resetProgress(d); store.mode = 'break'; releaseWake(); ping('away', 0, ''); save(); render();
   showToast('Focus session ended. Unfinished activities start over next session.');
 }
-function backToWork(){ A.playUntil = 0; const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
+function backToWork(){ A.playUntil = 0; A.game = null; const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
 function startFree(){
   const d = day(); if(store.mode !== 'playing' || d.freeUsed) return;
   d.freeUsed = true; store.mode = 'free'; store.freeStart = Date.now(); releaseWake();
@@ -647,7 +648,7 @@ function endFree(now, returning){
 function endDay(){ if(store.mode === 'free') ping('free', 0, ''); ping('away', 0, ''); ageUp(todayKey()); const d = day(); d.ended = true; d.streakMs = 0; store.mode = 'ended'; releaseWake(); save(); render(); openSummary(); }
 function resumeDay(){ const d = day(); d.ended = false; store.mode = 'playing'; store.day = todayKey(); store.lastTick = Date.now(); requestWake(); save(); closeSheet('#summary'); render(); }
 /* Between-session play: quick, free, no effect on scores. Off during focus so it can't become a distraction. */
-const canPlay = () => !store.pet.dead && store.mode !== 'playing' && Date.now() >= A.playUntil && Date.now() >= A.eatUntil;
+const canPlay = () => !store.pet.dead && store.mode !== 'playing' && !A.game && Date.now() >= A.playUntil && Date.now() >= A.eatUntil;
 const TREAT_MAX = 5;
 const PLAY_PTS = 2, PLAY_PTS_MAX = 10;   // small reward per treat/trick/dance, capped per day
 function playReward(ms){
@@ -696,6 +697,59 @@ function drawPlay(now){
   // dance: same moves as the happy-meter dance, plus a heart at the end
   drawDance(now, A.playStart);
   if(rt > 2400) spr(SP.heart, A.bx + S(8), GY - S(38) - Math.round((rt-2400)*0.01));
+}
+/* Hurdles mini-game (between sessions only): Bort runs, hurdles scroll in, tap the screen to jump.
+   1 good dog point per hurdle cleared, capped per day. */
+const GAME_PTS_MAX = 10, JUMP_MS = 800, HURDLE_H = () => G(6);
+function startGame(){
+  if(!canPlay()) return;
+  A.game = {start:Date.now(), world:0, speed:0, cleared:0, earned:0, hurdles:[], next:0, jumpAt:-1e9, over:0, began:false};
+  beep(SFX.hello); render();
+}
+function gameJump(){
+  const g = A.game, now = Date.now();
+  if(now - g.jumpAt < JUMP_MS) return;          // already in the air
+  g.jumpAt = now; g.began = true; beep([[660,.05],[990,.06]]);
+}
+function gameHeight(now){ const u = (now - A.game.jumpAt)/JUMP_MS; return u >= 0 && u < 1 ? G(11)*4*u*(1-u) : 0; }
+function gameStep(now, fdt){
+  const g = A.game; if(!g || g.over) return;
+  if(!g.began){ if(now - g.start > 12000){ A.game = null; render(); } return; }   // never tapped: quietly quit
+  if(!g.speed){ g.speed = 0.033*LW/48; g.next = LW + 4; }
+  const dx = g.speed*fdt; g.world += dx;
+  g.hurdles.forEach(h => h.x -= dx);
+  g.next -= dx;
+  if(g.next <= LW + 4){ g.hurdles.push({x:LW + 4, done:false}); g.next = LW + 4 + LW*(0.55 + Math.random()*0.5); }
+  const bx = LW*0.28, hy = gameHeight(now), d = day();
+  for(const h of g.hurdles){
+    if(!h.done && h.x < bx - S(17)){
+      h.done = true; g.cleared++; g.speed *= 1.035;
+      d.gamePts = d.gamePts || 0;
+      if(d.gamePts < GAME_PTS_MAX){ d.gamePts++; g.earned++; }
+    } else if(!h.done && Math.abs(h.x - bx) < S(7) && hy + S(3) < HURDLE_H() + 1){   // S(3): tucked legs
+      g.over = now; g.crashX = h.x;
+      store.hurdleBest = Math.max(store.hurdleBest || 0, g.cleared);
+      beep([[392,.12],[311,.12],[262,.3]]); buzz([60,40,120]);
+      if(g.earned){ setTimeout(() => showBurst('', d.gamePts >= GAME_PTS_MAX ? 'Hurdle points maxed today' : 'Good dog points', 1800, g.earned), 700); }
+      setTimeout(() => { A.game = null; save(); render(); }, 2600);
+      save(); break;
+    }
+  }
+  g.hurdles = g.hurdles.filter(h => h.x > -8);
+}
+function drawGame(now){
+  const g = A.game, bx = LW*0.28;
+  backdrop(g.world, true);   // no trees, so only hurdles stand on the ground
+  const hh = HURDLE_H();
+  for(const h of g.hurdles){ const hx = Math.round(h.x), w = G(3); vline(hx-w, GY-hh, GY-1); vline(hx+w, GY-hh, GY-1); hline(hx-w, hx+w, GY-hh); for(let x=hx-w;x<=hx+w;x+=2) px(x, GY-hh+1); hline(hx-w, hx+w, GY-Math.round(hh/2)); }
+  if(g.over){
+    bort(bx, GY-1, {pose:'lie', sleep:true});
+    spr(SP.ex, bx + S(8), GY - S(30));
+    return;
+  }
+  const hy = Math.round(gameHeight(now));
+  bort(bx, GY-1 - hy, {step: g.began && !hy ? STEP() : undefined, tuck: hy > 0, tongue:true});
+  if(!g.began && Math.floor(now/500) % 2) spr(SP.ex, bx + S(8), GY - S(36));
 }
 function setActivity(a){ store.activity = a; A.t = 0; A.lastCycle = 0; save(); render(); }
 function feed(){
@@ -1105,7 +1159,7 @@ function bort(cx, foot, o){
 const RUN = on => on ? STEP() : undefined;
 function ball(x,y){ px(x,y); px(x+1,y); px(x,y+1); px(x+1,y+1); }
 
-function backdrop(scroll){
+function backdrop(scroll, noTrees){
   spr(SP.sun, 14, 2);   // top left, next to the bowl; hearts live top right so tall hats don't collide
   for(let i=0;i<2;i++){
     const span = LW + 14, x = ((i*LW*0.55 + 4 - A.cloud - scroll*0.15) % span + span) % span - 10;
@@ -1114,7 +1168,7 @@ function backdrop(scroll){
   const sp = 34, toff = scroll*0.6, k0 = Math.floor(toff/sp) - 1;
   for(let k=k0;k<k0+Math.ceil(LW/sp)+3;k++){
     const x = Math.round(k*sp - toff + hash(k)*10);
-    if(hash(k+7) > 0.35) spr(SP.tree, x, GY - 8);
+    if(!noTrees && hash(k+7) > 0.35) spr(SP.tree, x, GY - 8);
   }
   hline(0, LW-1, GY);
   const tsp = 7, j0 = Math.floor(scroll/tsp);
@@ -1432,6 +1486,7 @@ function frame(){
   const paused = returning || partying || eating || pooping || dancing;
   A.cloud += fdt*0.0015;
   if(store.mode === 'playing' && !paused){ A.t += fdt; advance(fdt); }
+  if(A.game && store.mode !== 'playing'){ A.t += fdt; gameStep(now, fdt); }
   if(store.mode === 'playing' && !dimmed && !anySheetOpen() && now - lastTouch > DIM_AFTER && document.visibilityState === 'visible') setDim(true);
   if(store.mode !== 'playing' && dimmed) setDim(false);
   if(dimmed && now - lastClock >= 1000) updateDimClock();
@@ -1440,6 +1495,7 @@ function frame(){
     if(store.mode !== 'playing' || store.activity == null) A.caption = '';
     if(store.pet.dead) (store.pet.cause === 'ran' ? drawGone : drawGrave)(now);
     else if(eating) drawEat(now);
+    else if(store.mode !== 'playing' && A.game) drawGame(now);
     else if(store.mode !== 'playing' && now < A.playUntil) drawPlay(now);
     else if(store.mode === 'playing'){
       if(returning) drawReturn(now);
@@ -1481,7 +1537,11 @@ function render(){
   const fun = sinceFun(Date.now());
   if(!store.pet.dead && fun >= RESTLESS*DAY && m !== 'playing'){ const left = Math.max(1, Math.ceil((RUNAWAY*DAY - fun)/DAY)); st = PUP+' is restless: no enrichment in '+Math.floor(fun/DAY)+' days. Finish one within '+left+(left === 1 ? ' day' : ' days')+' or '+PUP+' may run away.'; }
   const playing = store.mode !== 'playing' && Date.now() < A.playUntil;
-  if(playing && !store.pet.dead) st = A.play === 'trick' ? (A.caption ? PUP+': '+A.caption : PUP+' is getting ready...') : A.playMsg;
+  if(A.game && store.mode !== 'playing' && !store.pet.dead){
+    const g = A.game, d0 = day(), best = store.hurdleBest || 0, capped = (d0.gamePts || 0) >= GAME_PTS_MAX;
+    st = !g.began ? 'Hurdles: tap the screen to make '+PUP+' jump.' : g.over ? 'Oof! '+plural(g.cleared, ['hurdle','hurdles'])+' cleared'+(g.cleared > 0 && g.cleared >= best ? ' · new best!' : ' · best '+best+'.')
+      : 'Hurdles · '+g.cleared+' cleared'+(capped ? ' · points maxed today' : '');
+  } else if(playing && !store.pet.dead) st = A.play === 'trick' ? (A.caption ? PUP+': '+A.caption : PUP+' is getting ready...') : A.playMsg;
   if(store.pet.dead) st = store.pet.cause === 'ran' ? PUP+' ran away. Adopt a new puppy.' : PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
   const sk = streak();
@@ -1500,7 +1560,7 @@ function render(){
     b.querySelector('.meta').textContent = done ? 'Done ✓' : Math.floor(ms/MIN) + ' / 30 min';
   });
   const keysOff = store.pet.dead || m === 'playing';
-  ['#pTreat','#pTrick','#pDance'].forEach(id => { const k = $(id); k.disabled = keysOff || playing; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
+  ['#pTreat','#pTrick','#pDance','#pGame'].forEach(id => { const k = $(id); k.disabled = keysOff || playing || !!A.game; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
   const fr = $('#free');
   fr.disabled = !(m === 'free' || (m === 'playing' && !d.freeUsed));
   fr.textContent = m === 'free' ? 'End break' : d.freeUsed ? 'Break used' : 'Free break';
@@ -1523,6 +1583,9 @@ $('#feed').addEventListener('click', feed);
 $('#pTreat').addEventListener('click', () => play('treat'));
 $('#pTrick').addEventListener('click', () => play('trick'));
 $('#pDance').addEventListener('click', () => play('dance'));
+$('#pGame').addEventListener('click', startGame);
+// Hurdles: tap the screen to jump
+$('#lcd').addEventListener('pointerdown', e => { if(A.game && !A.game.over && store.mode !== 'playing'){ e.preventDefault(); gameJump(); } });
 $('#vet').addEventListener('click', vet);
 $('#rest').addEventListener('click', layToRest);
 $('#adoptGo').addEventListener('click', adopt);
@@ -1588,7 +1651,7 @@ function openSummary(){
   const doneN = d.acts.filter(a => d.done[a]).length;
   const hungryPenalty = Math.floor(d.unfedMs/(5*MIN)), poopPenalty = d.poops*5;
   const goalMet = d.focusMs >= store.goalMin*MIN;
-  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) + (d.playPts || 0) - hungryPenalty - poopPenalty));
+  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) + (d.playPts || 0) + (d.gamePts || 0) - hungryPenalty - poopPenalty));
   let verdict;
   if(focusMin < 1) verdict = 'Not much playtime logged yet today.';
   else if(doneN === 3 && ratio >= 0.9 && !d.poops) verdict = 'Best boy energy. Every activity done, yard spotless, and you barely left.';
@@ -1625,7 +1688,7 @@ function openSummary(){
   }).join('');
   const earned = store.pet.lastAgedKey === todayKey() || (store.mode !== 'ended' && dayComplete(d));
   $('#sumActs').innerHTML += '<dt>Dog year</dt><dd'+(dayComplete(d) ? ' class="ok">'+(earned ? '+1 year' : 'Earned') : '>Finish all 3 to earn')+'</dd>';
-  $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd><dt>Play points</dt><dd>'+(d.playPts || 0)+' / '+PLAY_PTS_MAX+'</dd>';
+  $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd><dt>Play points</dt><dd>'+(d.playPts || 0)+' / '+PLAY_PTS_MAX+'</dd><dt>Hurdle points</dt><dd>'+(d.gamePts || 0)+' / '+GAME_PTS_MAX+'</dd>';
   const days = []; for(let i=6;i>=0;i--){ const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt); }
   const vals = days.map(dt => (store.days[keyOf(dt)] || {}).focusMs || 0), max = Math.max(...vals, MIN);
   $('#week').innerHTML = vals.map((v,i) => '<div class="bar'+(i === 6 ? ' today' : '')+'"><small>'+(v ? Math.round(v/3600000*10)/10+'h' : '')+'</small><i style="height:'+Math.max(3, v/max*70)+'px"></i></div>').join('');
