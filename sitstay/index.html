@@ -62,14 +62,6 @@ h1{font-family:var(--font-display);font-weight:700;font-size:1.6rem;line-height:
 .burst.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
 @keyframes pop{0%{transform:translateX(-50%) scale(.3);opacity:0}100%{transform:translateX(-50%) scale(1);opacity:1}}
 body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
-.keys{display:flex;justify-content:center;gap:22px;margin-top:9px}
-.key{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;padding:0;cursor:pointer;font-family:var(--font-display);font-size:.62rem;letter-spacing:.04em;color:rgba(255,255,255,.92)}
-.key i{display:block;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff7d6,#f2c94c 55%,#c7952a);box-shadow:0 3px 0 rgba(60,20,100,.45),inset 0 -2px 3px rgba(0,0,0,.18)}
-.key:active i{transform:translateY(2px);box-shadow:0 1px 0 rgba(60,20,100,.45),inset 0 -2px 3px rgba(0,0,0,.18)}
-.key:disabled{opacity:.4;cursor:default}
-.key:disabled i{transform:none}
-.key:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:10px}
-body.dim .keys{visibility:hidden}
 .brand{font-family:var(--font-display);font-weight:700;color:rgba(255,255,255,.85);font-size:.8rem;letter-spacing:.06em;text-align:center;margin-top:6px}
 .toast{position:absolute;left:8px;right:8px;bottom:8px;background:var(--lcd-on);color:var(--lcd);font-family:var(--font-display);font-size:.78rem;text-align:center;padding:8px 10px;border-radius:8px}
 .status{font-weight:800;font-size:.9rem;text-align:center;margin:0;min-height:1.3em}
@@ -186,11 +178,6 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <div class="toast" id="toast" hidden></div>
       <div class="burst" id="burst" hidden><b id="burstN">+0</b><span id="burstL">Good dog points</span><small id="burstS" hidden></small></div>
     </div>
-    <div class="keys" role="group" aria-label="Play with Bort between focus sessions">
-      <button class="key" id="pTreat"><i></i>Treat</button>
-      <button class="key" id="pTrick"><i></i>Trick</button>
-      <button class="key" id="pRub"><i></i>Belly rub</button>
-    </div>
     <div class="brand" id="brand">BORT</div>
   </div>
   <p class="status" id="status"></p>
@@ -208,6 +195,11 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <button class="btn" id="feed" disabled>Feed</button>
     <button class="btn" id="clean" disabled>Clean up</button>
     <button class="btn" id="free" disabled>Free break</button>
+  </div>
+  <div class="care" role="group" aria-label="Play with Bort between focus sessions">
+    <button class="btn" id="pTreat" disabled>Treat</button>
+    <button class="btn" id="pTrick" disabled>Trick</button>
+    <button class="btn" id="pDance" disabled>Dance</button>
   </div>
   <div class="actions">
     <button class="btn primary" id="primary">Start day</button>
@@ -352,7 +344,8 @@ const ACTS = {
   snuffle:   {name:'Snuffle mat',     unit:['treat','treats'],   T:2600, draw:drawSnuffle},
   tug:       {name:'Tug of war',      unit:['round','rounds'],   T:5000, draw:drawTug},
   agility:   {name:'Agility course',  unit:['jump','jumps'],     T:2200, draw:drawAgility},
-  butterfly: {name:'Butterfly chase', unit:['lap','laps'],       T:6000, draw:drawButterfly}
+  butterfly: {name:'Butterfly chase', unit:['lap','laps'],       T:6000, draw:drawButterfly},
+  park:      {name:'Dog park',        unit:['romp','romps'],     T:6400, draw:drawPark}
 };
 const TRICKS = ['Sit!','Spin!','High five!','Roll over!','Jump!','Shake!','Play dead!'];
 
@@ -656,7 +649,14 @@ function resumeDay(){ const d = day(); d.ended = false; store.mode = 'playing'; 
 /* Between-session play: quick, free, no effect on scores. Off during focus so it can't become a distraction. */
 const canPlay = () => !store.pet.dead && store.mode !== 'playing' && Date.now() >= A.playUntil && Date.now() >= A.eatUntil;
 const TREAT_MAX = 5;
-const PETS = ['Bort melts into a puddle.', 'Bort does the leg kick.', 'Bort grunts happily.', 'Best. Rub. Ever.'];
+const PLAY_PTS = 2, PLAY_PTS_MAX = 10;   // small reward per treat/trick/dance, capped per day
+function playReward(ms){
+  const d = day(); d.playPts = d.playPts || 0;
+  if(d.playPts >= PLAY_PTS_MAX) return false;
+  d.playPts = Math.min(PLAY_PTS_MAX, d.playPts + PLAY_PTS); save();
+  setTimeout(() => { beep(SFX.tick); showBurst('', d.playPts >= PLAY_PTS_MAX ? 'Play points maxed today' : 'Good dog points', 1500, PLAY_PTS); }, ms);
+  return true;
+}
 function play(kind){
   if(!canPlay()) return;
   const now = Date.now(), d = day();
@@ -665,15 +665,17 @@ function play(kind){
     d.treats = d.treats || 0;
     if(d.treats >= TREAT_MAX){ A.play = 'full'; A.playUntil = now + 2200; A.playMsg = PUP+' is stuffed. Treats are back tomorrow.'; render(); return; }
     d.treats++; A.playUntil = now + 3000; A.playMsg = PUP+' caught the treat! ('+(TREAT_MAX - d.treats)+' left today)';
-    setTimeout(() => { beep(SFX.tick); buzz(30); }, 900);
+    setTimeout(() => buzz(30), 900);
+    playReward(2000);
   } else if(kind === 'trick'){
     const list = TRICKS.concat(store.pet.tricks || []);
     let i; do { i = Math.floor(Math.random()*list.length); } while(list.length > 1 && i === A.lastTrick);
     A.lastTrick = i; A.playTrick = i; A.playUntil = now + ACTS.tricks.T;
-    setTimeout(() => beep(SFX.hello), ACTS.tricks.T*0.8);
+    playReward(ACTS.tricks.T*0.8);
   } else {
-    A.playUntil = now + 3200; A.playMsg = PETS[Math.floor(Math.random()*PETS.length)];
-    beep(SFX.hello); buzz([20,40,20,40,20]);
+    A.playUntil = now + 3200; A.playMsg = PUP+' busts a move!'+(day().playPts >= PLAY_PTS_MAX ? ' (play points maxed today)' : '');
+    beep(SFX.dance); buzz([20,40,20,40,20]);
+    playReward(2400);
   }
   save(); dirty = true; render();
 }
@@ -691,12 +693,9 @@ function drawPlay(now){
     if(rt >= 1900){ const hy = GY - S(36) - Math.round((rt-1900)*0.008); spr(SP.heart, x + S(8), hy); }
     return;
   }
-  // belly rub: on his back, wiggling, eyes shut, hearts drifting up
-  const wig = Math.floor(rt/220) % 2;
-  bort(x + (wig ? 1 : 0), GY-1, {pose:'lie', flipV:true, sleep:true, wag, face: Math.floor(rt/1100) % 2 ? -1 : 1});
-  for(let i=0;i<2;i++){ const ph = ((rt*0.0006) + i/2) % 1; spr(SP.heart, x - S(6) + i*S(14) + Math.round(Math.sin(rt*0.005+i)*2), GY - S(18) - Math.round(ph*S(22))); }
-  const hx = x + S(4) + Math.round(Math.sin(rt*0.02)*S(5)), hy = GY - S(16);   // a hand doing the rubbing
-  hline(hx-2, hx+2, hy); hline(hx-2, hx+2, hy+1); px(hx-3, hy+2); px(hx-1, hy+2); px(hx+1, hy+2); px(hx+3, hy+2);
+  // dance: same moves as the happy-meter dance, plus a heart at the end
+  drawDance(now, A.playStart);
+  if(rt > 2400) spr(SP.heart, A.bx + S(8), GY - S(38) - Math.round((rt-2400)*0.01));
 }
 function setActivity(a){ store.activity = a; A.t = 0; A.lastCycle = 0; save(); render(); }
 function feed(){
@@ -1082,7 +1081,7 @@ function bort(cx, foot, o){
   const x0 = Math.max(1, Math.round(cx) - 40), x1 = Math.min(LW-2, Math.round(cx) + 40), y0 = Math.max(0, Math.round(foot) - 58), y1 = Math.min(LH-2, Math.round(foot) + 6);
   let d = g.getImageData(0,0,LW,LH).data;
   const inside = i => d[i*4+3] > 110;
-  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(inside(i) && (!inside(i-1) || !inside(i+1) || !inside(i-LW) || !inside(i+LW))) buf[i] = 1; }
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(!inside(i)) continue; if(!inside(i-1) || !inside(i+1) || !inside(i-LW) || !inside(i+LW)) buf[i] = 1; else if(o.solid) buf[i] = 0; }
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH);
   bortBase(cx, foot, o); bortMarks(o); const eye = bortFace(o, info.head);
   d = g.getImageData(0,0,LW,LH).data;
@@ -1279,6 +1278,41 @@ function drawButterfly(p){
   spr(Math.floor(A.t/150) % 2 ? SP.flyA : SP.flyB, bx-1, by-1);
   bort(x, GY-1, {face, step:RUN(true), tongue:true});
 }
+/* Dog park: Bort plays with two park regulars, drawn with the same pup engine in different looks. */
+const PALS = [{ears:'fold', tail:'straight', mark:'saddle', snout:'long', size:0.8}, {ears:'one', tail:'stub', mark:'eyepatch', snout:'short', size:0.62}];
+function pal(i, x, y, o){
+  const sv = {look:store.pet.look, hop:A.hopStart, bx:A.bx, bf:A.bf};
+  store.pet.look = PALS[i]; A.hopStart = -1e9;
+  try{ bort(x, y, Object.assign({noWear:true, solid:true}, o)); }
+  finally{ store.pet.look = sv.look; A.hopStart = sv.hop; A.bx = sv.bx; A.bf = sv.bf; }
+}
+function drawPark(p, cyc){
+  backdrop(0);
+  const T = ACTS.park.T, k = p/T, wag = Math.sin(A.t*0.05);
+  if(cyc % 2 === 0){
+    // chase: the bigger pal zooms across the park twice, Bort right on his tail; the little one watches
+    pal(1, LW*0.22, GY-1, {pose:'sit', wag, tongue:true});
+    const span = LW + S(60), lead = (k*2*span) % span - S(20), wrap = x => x < -S(20) ? x + span : x;
+    pal(0, lead, GY-1, {step:STEP(), tongue:true});
+    bort(wrap(lead - S(34)), GY-1, {step:STEP(), tongue:true, wag, solid:true});
+  } else {
+    // play bow, then bounce at each other, then a happy sit side by side
+    const bx = LW*0.2, fx = LW*0.84;
+    if(k < 0.3){
+      const bow = Math.floor(p/500) % 2 === 0;
+      pal(1, fx, GY-1, {face:-1, down:!bow, wag});
+      bort(bx, GY-1, {down:bow, wag, tongue:true, solid:true});
+    } else if(k < 0.75){
+      const u = (k-0.3)/0.45, hopA = Math.abs(Math.sin(u*Math.PI*4)), hopB = Math.abs(Math.cos(u*Math.PI*4));
+      pal(1, fx - Math.round(hopB*S(5)), GY-1 - Math.round(hopB*G(6)), {face:-1, tuck:hopB > 0.3, wag, tongue:true});
+      bort(bx + Math.round(hopA*S(5)), GY-1 - Math.round(hopA*G(6)), {tuck:hopA > 0.3, wag, tongue:true, solid:true});
+    } else {
+      pal(1, fx, GY-1, {face:-1, pose:'sit', wag, tongue:true});
+      bort(bx, GY-1, {pose:'sit', wag, tongue:true, solid:true});
+      spr(SP.heart, Math.round((bx+fx)/2) - 2, GY - S(36) - Math.round((k-0.75)*12));
+    }
+  }
+}
 function drawReturn(now){
   backdrop(0);
   const rt = now - A.returnStart, lvl = A.returnLevel || 1, wx = Math.round(LW*0.78);
@@ -1300,9 +1334,9 @@ function drawReturn(now){
   else spr(SP.heart, x - 2, GY - S(38));
 }
 SP.note = ["..##","..#.","..#.","###.","##.."];
-function drawDance(now){
+function drawDance(now, start){
   backdrop(0);
-  const rt = now - A.danceStart, x = LW*0.5 + Math.round(Math.sin(rt*0.006)*S(6)), beat = Math.floor(rt/300);
+  const rt = now - (start == null ? A.danceStart : start), x = LW*0.5 + Math.round(Math.sin(rt*0.006)*S(6)), beat = Math.floor(rt/300);
   for(let i=0;i<3;i++){ const ny = Math.round(GY - 16 - ((rt*0.01 + i*9) % (GY-20))); spr(SP.note, Math.round(LW*(0.15 + 0.7*hash(i+90))) + Math.round(Math.sin(rt*0.005+i)*2), ny); }
   const o = {face: beat % 2 ? -1 : 1, wag: Math.sin(rt*0.05), tongue:true};
   if(Math.floor(rt/600) % 2){ o.pose = 'sit'; o.paw = beat % 2 === 0; }
@@ -1466,7 +1500,7 @@ function render(){
     b.querySelector('.meta').textContent = done ? 'Done ✓' : Math.floor(ms/MIN) + ' / 30 min';
   });
   const keysOff = store.pet.dead || m === 'playing';
-  ['#pTreat','#pTrick','#pRub'].forEach(id => { const k = $(id); k.disabled = keysOff || playing; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
+  ['#pTreat','#pTrick','#pDance'].forEach(id => { const k = $(id); k.disabled = keysOff || playing; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
   const fr = $('#free');
   fr.disabled = !(m === 'free' || (m === 'playing' && !d.freeUsed));
   fr.textContent = m === 'free' ? 'End break' : d.freeUsed ? 'Break used' : 'Free break';
@@ -1488,7 +1522,7 @@ $('#secondary').addEventListener('click', () => { if(store.mode === 'ended') res
 $('#feed').addEventListener('click', feed);
 $('#pTreat').addEventListener('click', () => play('treat'));
 $('#pTrick').addEventListener('click', () => play('trick'));
-$('#pRub').addEventListener('click', () => play('rub'));
+$('#pDance').addEventListener('click', () => play('dance'));
 $('#vet').addEventListener('click', vet);
 $('#rest').addEventListener('click', layToRest);
 $('#adoptGo').addEventListener('click', adopt);
@@ -1554,7 +1588,7 @@ function openSummary(){
   const doneN = d.acts.filter(a => d.done[a]).length;
   const hungryPenalty = Math.floor(d.unfedMs/(5*MIN)), poopPenalty = d.poops*5;
   const goalMet = d.focusMs >= store.goalMin*MIN;
-  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) - hungryPenalty - poopPenalty));
+  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) + (d.playPts || 0) - hungryPenalty - poopPenalty));
   let verdict;
   if(focusMin < 1) verdict = 'Not much playtime logged yet today.';
   else if(doneN === 3 && ratio >= 0.9 && !d.poops) verdict = 'Best boy energy. Every activity done, yard spotless, and you barely left.';
@@ -1591,7 +1625,7 @@ function openSummary(){
   }).join('');
   const earned = store.pet.lastAgedKey === todayKey() || (store.mode !== 'ended' && dayComplete(d));
   $('#sumActs').innerHTML += '<dt>Dog year</dt><dd'+(dayComplete(d) ? ' class="ok">'+(earned ? '+1 year' : 'Earned') : '>Finish all 3 to earn')+'</dd>';
-  $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd>';
+  $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd><dt>Play points</dt><dd>'+(d.playPts || 0)+' / '+PLAY_PTS_MAX+'</dd>';
   const days = []; for(let i=6;i>=0;i--){ const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt); }
   const vals = days.map(dt => (store.days[keyOf(dt)] || {}).focusMs || 0), max = Math.max(...vals, MIN);
   $('#week').innerHTML = vals.map((v,i) => '<div class="bar'+(i === 6 ? ' today' : '')+'"><small>'+(v ? Math.round(v/3600000*10)/10+'h' : '')+'</small><i style="height:'+Math.max(3, v/max*70)+'px"></i></div>').join('');
