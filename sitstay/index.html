@@ -92,7 +92,7 @@ body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
 .wchip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .wchip:disabled{opacity:.5;cursor:default}
 .care,.actions{display:flex;gap:8px}
-.care .btn{min-width:0;padding-left:4px;padding-right:4px}
+.care .btn{min-width:0}
 .btn{flex:1;font-family:var(--font-display);font-size:.88rem;border-radius:16px;padding:13px 10px;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.alert{border-color:var(--warn);color:var(--warn)}
@@ -201,8 +201,10 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <button class="btn" id="pTreat" disabled>Treat</button>
     <button class="btn" id="pTrick" disabled>Trick</button>
     <button class="btn" id="pDance" disabled>Dance</button>
+  </div>
+  <div class="care" role="group" aria-label="Games with Bort between focus sessions">
     <button class="btn" id="pGame" disabled>Hurdles</button>
-    <button class="btn" id="pCatch" disabled>Catch</button>
+    <button class="btn" id="pCatch" disabled>Treat Catch</button>
   </div>
   <div class="actions">
     <button class="btn primary" id="primary">Start day</button>
