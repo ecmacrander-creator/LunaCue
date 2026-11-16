@@ -92,6 +92,7 @@ body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
 .wchip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .wchip:disabled{opacity:.5;cursor:default}
 .care,.actions{display:flex;gap:8px}
+.care .btn{min-width:0;padding-left:4px;padding-right:4px}
 .btn{flex:1;font-family:var(--font-display);font-size:.88rem;border-radius:16px;padding:13px 10px;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.alert{border-color:var(--warn);color:var(--warn)}
@@ -201,6 +202,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <button class="btn" id="pTrick" disabled>Trick</button>
     <button class="btn" id="pDance" disabled>Dance</button>
     <button class="btn" id="pGame" disabled>Hurdles</button>
+    <button class="btn" id="pCatch" disabled>Catch</button>
   </div>
   <div class="actions">
     <button class="btn primary" id="primary">Start day</button>
@@ -703,7 +705,7 @@ function drawPlay(now){
 const GAME_PTS_MAX = 10, JUMP_MS = 800, HURDLE_H = () => G(6);
 function startGame(){
   if(!canPlay()) return;
-  A.game = {start:Date.now(), world:0, speed:0, cleared:0, earned:0, hurdles:[], next:0, jumpAt:-1e9, over:0, began:false};
+  A.game = {kind:'hurdles', start:Date.now(), world:0, speed:0, cleared:0, earned:0, hurdles:[], next:0, jumpAt:-1e9, over:0, began:false};
   beep(SFX.hello); render();
 }
 function gameJump(){
@@ -714,6 +716,7 @@ function gameJump(){
 function gameHeight(now){ const u = (now - A.game.jumpAt)/JUMP_MS; return u >= 0 && u < 1 ? G(11)*4*u*(1-u) : 0; }
 function gameStep(now, fdt){
   const g = A.game; if(!g || g.over) return;
+  if(g.kind === 'catch') return catchStep(now, fdt);
   if(!g.began){ if(now - g.start > 12000){ A.game = null; render(); } return; }   // never tapped: quietly quit
   if(!g.speed){ g.speed = 0.028*LW/48; g.maxSpeed = g.speed*1.7; g.next = LW + 4; }
   const dx = g.speed*fdt; g.world += dx;
@@ -738,6 +741,7 @@ function gameStep(now, fdt){
   g.hurdles = g.hurdles.filter(h => h.x > -8);
 }
 function drawGame(now){
+  if(A.game.kind === 'catch') return drawCatch(now);
   const g = A.game, bx = LW*0.28;
   backdrop(g.world, true);   // no trees, so only hurdles stand on the ground
   const hh = HURDLE_H();
@@ -749,6 +753,69 @@ function drawGame(now){
   }
   const hy = Math.round(gameHeight(now));
   bort(bx, GY-1 - hy, {step: g.began && !hy ? STEP() : undefined, tuck: hy > 0, tongue:true});
+  if(!g.began && Math.floor(now/500) % 2) spr(SP.ex, bx + S(8), GY - S(36));
+}
+/* Treat Catch (between sessions only): treats fall, tap or drag where Bort should run to catch them.
+   Socks sneak in later: catching one costs a life, same as dropping a treat. 3 lives. 1 point per treat, capped per day. */
+const CATCH_PTS_MAX = 10, CATCH_LIVES = 3;
+function startCatch(){
+  if(!canPlay()) return;
+  A.game = {kind:'catch', start:Date.now(), began:false, over:0, items:[], caught:0, lives:CATCH_LIVES, earned:0,
+            bx:LW*0.5, target:LW*0.5, face:1, next:0, fall:0.019*LW/48, every:1400, drag:false, flash:0};
+  beep(SFX.hello); render();
+}
+function catchAim(e){
+  const g = A.game, r = cv.getBoundingClientRect();
+  g.target = Math.max(S(14), Math.min(LW - S(14), (e.clientX - r.left - OX)/P));
+  if(!g.began){ g.began = true; g.next = Date.now() + 400; }
+}
+function catchStep(now, fdt){
+  const g = A.game;
+  if(!g.began){ if(now - g.start > 12000){ A.game = null; render(); } return; }
+  // Bort runs toward the target
+  const run = 0.075*LW/48*fdt, dx = g.target - g.bx;
+  if(Math.abs(dx) > 0.6){ g.bx += Math.sign(dx)*Math.min(Math.abs(dx), run); g.face = dx > 0 ? 1 : -1; }
+  // spawn
+  if(now >= g.next){
+    const sock = g.caught >= 3 && Math.random() < 0.22;
+    g.items.push({x: S(8) + Math.random()*(LW - S(16)), y:-4, sock});
+    g.next = now + g.every;
+  }
+  const topY = GY - S(28), d = day();   // anything that reaches Bort's head height over his body counts: forgiving on a phone
+  for(const it of g.items){
+    it.y += g.fall*fdt;
+    if(it.y >= topY && it.y <= topY + 6 && Math.abs(it.x - g.bx) < S(15)){
+      it.gone = true;
+      if(it.sock){ g.lives--; g.flash = now; beep([[220,.12],[180,.18]]); buzz([40,30,40]); }
+      else {
+        g.caught++; g.fall = Math.min(0.019*LW/48*1.7, g.fall*1.03); g.every = Math.max(650, g.every*0.96);
+        d.catchPts = d.catchPts || 0; if(d.catchPts < CATCH_PTS_MAX){ d.catchPts++; g.earned++; }
+        g.chomp = now; beep([[880,.04],[1175,.06]]);
+      }
+    } else if(it.y > GY){
+      it.gone = true;
+      if(!it.sock){ g.lives--; g.flash = now; beep([[330,.1],[262,.16]]); }
+    }
+  }
+  g.items = g.items.filter(it => !it.gone);
+  if(g.lives <= 0){
+    g.over = now; g.items = [];
+    store.catchBest = Math.max(store.catchBest || 0, g.caught);
+    beep([[392,.12],[311,.12],[262,.3]]); buzz([60,40,120]);
+    if(g.earned){ setTimeout(() => showBurst('', d.catchPts >= CATCH_PTS_MAX ? 'Catch points maxed today' : 'Good dog points', 1800, g.earned), 700); }
+    setTimeout(() => { A.game = null; save(); render(); }, 2600);
+    save();
+  }
+  dirty = true;
+}
+function drawCatch(now){
+  const g = A.game, bx = Math.round(g.bx);
+  backdrop(0, true);
+  for(const it of g.items) spr(it.sock ? SP.sock : SP.bone, Math.round(it.x) - 2, Math.round(it.y));
+  // lives show in the status line (♥♥♡) so they don't get mixed up with Bort's happiness hearts
+  if(g.over){ bort(bx, GY-1, {pose:'lie', sleep:true, face:g.face}); return; }
+  const moving = Math.abs(g.target - g.bx) > 0.6, chomp = g.chomp && now - g.chomp < 400, yuck = g.flash && now - g.flash < 500;
+  bort(bx, GY-1, {face:g.face, step: moving ? STEP() : undefined, tongue: chomp, item: chomp ? 'bone' : null, wag: Math.sin(now*0.04), tilt: yuck ? 0.3 : 0});
   if(!g.began && Math.floor(now/500) % 2) spr(SP.ex, bx + S(8), GY - S(36));
 }
 function setActivity(a){ store.activity = a; A.t = 0; A.lastCycle = 0; save(); render(); }
@@ -1180,6 +1247,7 @@ function backdrop(scroll, noTrees){
   }
 }
 SP.spark = [".#.","###",".#."];
+SP.sock = ["##..","##..","##..","####",".###"];
 SP.spark2 = ["#.#",".#.","#.#"];
 function sparkleLayer(now){
   if(now >= A.sparkUntil) return;
@@ -1540,9 +1608,16 @@ function render(){
   if(!store.pet.dead && fun >= RESTLESS*DAY && m !== 'playing'){ const left = Math.max(1, Math.ceil((RUNAWAY*DAY - fun)/DAY)); st = PUP+' is restless: no enrichment in '+Math.floor(fun/DAY)+' days. Finish one within '+left+(left === 1 ? ' day' : ' days')+' or '+PUP+' may run away.'; }
   const playing = store.mode !== 'playing' && Date.now() < A.playUntil;
   if(A.game && store.mode !== 'playing' && !store.pet.dead){
-    const g = A.game, d0 = day(), best = store.hurdleBest || 0, capped = (d0.gamePts || 0) >= GAME_PTS_MAX;
+    const g = A.game, d0 = day();
+    if(g.kind === 'catch'){
+      const best = store.catchBest || 0, capped = (d0.catchPts || 0) >= CATCH_PTS_MAX;
+      st = !g.began ? 'Treat Catch: tap or drag where '+PUP+' should run. Dodge the socks!' : g.over ? 'Round over! '+plural(g.caught, ['treat','treats'])+' caught'+(g.caught > 0 && g.caught >= best ? ' · new best!' : ' · best '+best+'.')
+        : 'Treat Catch · '+g.caught+' caught · '+'♥'.repeat(g.lives)+'♡'.repeat(CATCH_LIVES - g.lives)+(capped ? ' · points maxed today' : '');
+    } else {
+    const best = store.hurdleBest || 0, capped = (d0.gamePts || 0) >= GAME_PTS_MAX;
     st = !g.began ? 'Hurdles: tap the screen to make '+PUP+' jump.' : g.over ? 'Oof! '+plural(g.cleared, ['hurdle','hurdles'])+' cleared'+(g.cleared > 0 && g.cleared >= best ? ' · new best!' : ' · best '+best+'.')
       : 'Hurdles · '+g.cleared+' cleared'+(capped ? ' · points maxed today' : '');
+    }
   } else if(playing && !store.pet.dead) st = A.play === 'trick' ? (A.caption ? PUP+': '+A.caption : PUP+' is getting ready...') : A.playMsg;
   if(store.pet.dead) st = store.pet.cause === 'ran' ? PUP+' ran away. Adopt a new puppy.' : PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
@@ -1562,7 +1637,7 @@ function render(){
     b.querySelector('.meta').textContent = done ? 'Done ✓' : Math.floor(ms/MIN) + ' / 30 min';
   });
   const keysOff = store.pet.dead || m === 'playing';
-  ['#pTreat','#pTrick','#pDance','#pGame'].forEach(id => { const k = $(id); k.disabled = keysOff || playing || !!A.game; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
+  ['#pTreat','#pTrick','#pDance','#pGame','#pCatch'].forEach(id => { const k = $(id); k.disabled = keysOff || playing || !!A.game; k.title = m === 'playing' ? 'Play with '+PUP+' between focus sessions' : ''; });
   const fr = $('#free');
   fr.disabled = !(m === 'free' || (m === 'playing' && !d.freeUsed));
   fr.textContent = m === 'free' ? 'End break' : d.freeUsed ? 'Break used' : 'Free break';
@@ -1586,8 +1661,15 @@ $('#pTreat').addEventListener('click', () => play('treat'));
 $('#pTrick').addEventListener('click', () => play('trick'));
 $('#pDance').addEventListener('click', () => play('dance'));
 $('#pGame').addEventListener('click', startGame);
+$('#pCatch').addEventListener('click', startCatch);
 // Hurdles: tap the screen to jump
-$('#lcd').addEventListener('pointerdown', e => { if(A.game && !A.game.over && store.mode !== 'playing'){ e.preventDefault(); gameJump(); } });
+$('#lcd').addEventListener('pointerdown', e => {
+  if(!A.game || A.game.over || store.mode === 'playing') return;
+  e.preventDefault();
+  if(A.game.kind === 'catch'){ A.game.drag = true; catchAim(e); } else gameJump();
+});
+$('#lcd').addEventListener('pointermove', e => { if(A.game && A.game.kind === 'catch' && A.game.drag && !A.game.over) catchAim(e); });
+['pointerup','pointercancel','pointerleave'].forEach(t => $('#lcd').addEventListener(t, () => { if(A.game) A.game.drag = false; }));
 $('#vet').addEventListener('click', vet);
 $('#rest').addEventListener('click', layToRest);
 $('#adoptGo').addEventListener('click', adopt);
@@ -1653,7 +1735,7 @@ function openSummary(){
   const doneN = d.acts.filter(a => d.done[a]).length;
   const hungryPenalty = Math.floor(d.unfedMs/(5*MIN)), poopPenalty = d.poops*5;
   const goalMet = d.focusMs >= store.goalMin*MIN;
-  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) + (d.playPts || 0) + (d.gamePts || 0) - hungryPenalty - poopPenalty));
+  const score = Math.max(0, Math.round(focusMin + (d.longestMs/MIN)*0.5 - d.leaves*3 + doneN*20 + (goalMet ? 10 : 0) + (d.playPts || 0) + (d.gamePts || 0) + (d.catchPts || 0) - hungryPenalty - poopPenalty));
   let verdict;
   if(focusMin < 1) verdict = 'Not much playtime logged yet today.';
   else if(doneN === 3 && ratio >= 0.9 && !d.poops) verdict = 'Best boy energy. Every activity done, yard spotless, and you barely left.';
@@ -1690,7 +1772,7 @@ function openSummary(){
   }).join('');
   const earned = store.pet.lastAgedKey === todayKey() || (store.mode !== 'ended' && dayComplete(d));
   $('#sumActs').innerHTML += '<dt>Dog year</dt><dd'+(dayComplete(d) ? ' class="ok">'+(earned ? '+1 year' : 'Earned') : '>Finish all 3 to earn')+'</dd>';
-  $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd><dt>Play points</dt><dd>'+(d.playPts || 0)+' / '+PLAY_PTS_MAX+'</dd><dt>Hurdle points</dt><dd>'+(d.gamePts || 0)+' / '+GAME_PTS_MAX+'</dd>';
+  $('#sumCare').innerHTML = '<dt>Meals</dt><dd>'+d.meals+'</dd><dt>Time hungry</dt><dd'+(d.unfedMs >= 5*MIN ? ' class="bad"' : '')+'>'+fmt(d.unfedMs)+'</dd><dt>Poop cleaned</dt><dd>'+d.cleaned+'</dd><dt>Poop left</dt><dd'+(d.poops ? ' class="bad"' : ' class="ok"')+'>'+d.poops+'</dd><dt>Play points</dt><dd>'+(d.playPts || 0)+' / '+PLAY_PTS_MAX+'</dd><dt>Hurdle points</dt><dd>'+(d.gamePts || 0)+' / '+GAME_PTS_MAX+'</dd><dt>Catch points</dt><dd>'+(d.catchPts || 0)+' / '+CATCH_PTS_MAX+'</dd>';
   const days = []; for(let i=6;i>=0;i--){ const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(dt); }
   const vals = days.map(dt => (store.days[keyOf(dt)] || {}).focusMs || 0), max = Math.max(...vals, MIN);
   $('#week').innerHTML = vals.map((v,i) => '<div class="bar'+(i === 6 ? ' today' : '')+'"><small>'+(v ? Math.round(v/3600000*10)/10+'h' : '')+'</small><i style="height:'+Math.max(3, v/max*70)+'px"></i></div>').join('');
