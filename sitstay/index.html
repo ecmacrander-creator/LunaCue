@@ -1086,63 +1086,71 @@ function bortBase(cx, foot, o){
   if(rot){ g.translate(0,-16); g.rotate(rot*face); g.translate(0,16); }
   g.scale(face*(o.sx == null ? 1 : o.sx), 1);
 }
+const HS = 1.2;   // chihuahua proportions: big apple head
+/* o._limbs: 0 = body + head only (outlined), 1 = legs + tail only (drawn solid) */
 function bortShape(o){
-  const g = mctx, wag = o.wag || 0, L = petLook();
-  const oval = (x,y,rx,ry,r) => { g.beginPath(); g.ellipse(x,y,rx,ry,r||0,0,Math.PI*2); g.fill(); };
-  const leg = (x1,y1,x2,y2) => { g.lineWidth = 5.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
-  const tail = (x,y,r,len) => { g.save(); g.translate(x,y); g.rotate(r); g.lineWidth = 5.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(0,0);
+  const g = mctx, wag = o.wag || 0, L = petLook(), limbs = o._limbs === 1;
+  const oval = (x,y,rx,ry,r) => { if(limbs) return; g.beginPath(); g.ellipse(x,y,rx,ry,r||0,0,Math.PI*2); g.fill(); };
+  const leg = (x1,y1,x2,y2) => { if(!limbs) return; g.lineWidth = 3.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
+  const tail = (x,y,r,len) => { if(!limbs) return; g.save(); g.translate(x,y); g.rotate(r); g.lineWidth = 4.2; g.lineCap = 'round'; g.beginPath(); g.moveTo(0,0);
     if(L.tail === 'straight') g.lineTo(-len*.85,-len*.6);
     else if(L.tail === 'stub') g.lineTo(-len*.3,-len*.3);
     else g.bezierCurveTo(-len*.55,-len*.15,-len*.75,-len*.75,-len*.25,-len);
     g.stroke(); g.restore(); };
   let head;
   if(o.pose === 'lie'){
-    tail(-25,-12,-0.6+wag*0.3,15); oval(0,-13,27,11); oval(-14,-11,10,8); oval(26,-3.4,10,3.6); oval(-17,-3.2,8,3.4);
-    head = {x:25, y:-22, t:(o.sleep ? 0.28 : 0) + (o.tilt || 0)};
+    tail(-24,-11,-0.6+wag*0.3,14); oval(0,-11,24,10); oval(-13,-10,10,8);
+    leg(14,-4,30,-3); leg(-12,-4,-24,-3);
+    head = {x:24, y:-21, t:(o.sleep ? 0.28 : 0) + (o.tilt || 0)};
   } else if(o.pose === 'sit'){
-    tail(-17,-6,-0.9+wag*0.5,15); leg(14,-26,15.5,-1.5); oval(-2,-27,12,19,0.35); oval(-10,-11,11.5,9.5); oval(-3,-2.5,7.5,3);
-    if(o.paw) leg(8,-27,24,-36); else leg(8,-27,8,-1.5);
-    head = {x:11, y:-50, t:o.tilt || 0};
+    tail(-15,-5,-0.9+wag*0.5,14); oval(-1,-21,11,15,0.35); oval(-8,-9,11,8.5);
+    leg(13,-20,14,-1.5);
+    if(o.paw) leg(6,-22,20,-30); else leg(5,-19,5,-1.5);
+    head = {x:10, y:-41, t:o.tilt || 0};
   } else {
     const moving = o.step !== undefined, ph = o.step ? Math.PI*1.5 : Math.PI*0.5, a = moving ? 1 : 0;
-    const sw = off => Math.sin(ph+off)*7*a, tk = o.tuck ? 8 : 0;
-    tail(-22,-33,-0.15+wag*0.45,17);
-    leg(-13,-24,-13+sw(Math.PI),-1.5-tk); leg(15,-24,15+sw(0),-1.5-tk);
-    g.beginPath(); g.moveTo(-24,-28); g.bezierCurveTo(-24,-39,-8,-39,6,-37); g.bezierCurveTo(17,-37,24,-33,23,-26); g.bezierCurveTo(22,-20,15,-19,8,-20); g.bezierCurveTo(0,-21,-6,-18,-13,-19); g.bezierCurveTo(-22,-19,-25,-22,-24,-28); g.closePath(); g.fill();
-    oval(-16,-26,8,8.5);
-    leg(-17,-23,-17+sw(0),-1.5-tk); leg(11,-24,11+sw(Math.PI),-1.5-tk);
-    head = {x:23, y:-45, t:(o.down ? 1 : 0)*0.7};
+    const sw = off => Math.sin(ph+off)*5*a, tk = o.tuck ? 6 : 0, bow = o.down ? 6 : 0;
+    tail(-21,-26,-0.15+wag*0.45,15);
+    // far legs, near legs; in a bow the front legs reach forward and the chest drops
+    leg(-11,-17,-11+sw(Math.PI),-1.5-tk); leg(17,-17+bow,17+sw(0)+bow*1.2,-1.5-tk);
+    leg(-18,-16,-18+sw(0),-1.5-tk); leg(9,-17+bow,9+sw(Math.PI)+bow*1.2,-1.5-tk);
+    if(!limbs){
+      g.save(); if(bow){ g.translate(-20,-20); g.rotate(0.2); g.translate(20,20); }
+      g.beginPath(); g.moveTo(-23,-21); g.bezierCurveTo(-23,-32,-8,-31,4,-30); g.bezierCurveTo(16,-31,23,-27,22,-20); g.bezierCurveTo(21,-14,14,-13,8,-14); g.bezierCurveTo(0,-15,-6,-13,-13,-13); g.bezierCurveTo(-21,-13,-24,-16,-23,-21); g.closePath(); g.fill();
+      oval(-15,-20,8,7.5); oval(14,-21,9.5,8.5);   // haunch, round chest
+      g.restore();
+    }
+    head = {x:21 + bow*0.6, y:-37 + bow*2.2, t:(o.down ? 0.35 : 0)};
   }
-  g.save(); g.translate(head.x, head.y); g.rotate(head.t);
-  g.beginPath(); g.arc(0,-1,13.5,0,Math.PI*2); g.fill();
-  if(L.snout === 'long') oval(15,6,12,5.5,0.12); else oval(12,5.5,8.5,6,0.1);
-  const earUp = () => { g.beginPath(); g.moveTo(-5,-8); g.quadraticCurveTo(-7,-28,0,-31); g.quadraticCurveTo(6,-28,6,-20); g.quadraticCurveTo(6,-13,4,-9); g.closePath(); g.fill(); };
+  if(limbs) return {head, mouth:{x:0,y:0}};
+  g.save(); g.translate(head.x, head.y); g.rotate(head.t); g.scale(HS, HS);
+  g.beginPath(); g.arc(0,-1,12,0,Math.PI*2); g.fill();
+  if(L.snout === 'long') oval(14,5,11,5,0.12); else oval(11,5,7,5.2,0.1);
+  const earUp = () => { g.beginPath(); g.moveTo(-5,-8); g.quadraticCurveTo(-8,-28,1,-30); g.quadraticCurveTo(8,-26,7,-18); g.quadraticCurveTo(6,-12,4,-9); g.closePath(); g.fill(); };
   const earFold = () => { g.beginPath(); g.moveTo(-5,-8); g.quadraticCurveTo(-6,-22,2,-24); g.quadraticCurveTo(11,-24,12,-15); g.quadraticCurveTo(6,-15,4,-9); g.closePath(); g.fill(); };
-  // back ear
   g.beginPath();
   if(L.ears === 'fold'){ g.moveTo(-10,-4); g.quadraticCurveTo(-18,-16,-12,-20); g.quadraticCurveTo(-4,-20,-1,-11); }
-  else { g.moveTo(-10,-4); g.quadraticCurveTo(-19,-21,-14,-28); g.quadraticCurveTo(-6,-20,-1,-11); }
+  else { g.moveTo(-9,-4); g.quadraticCurveTo(-21,-20,-15,-28); g.quadraticCurveTo(-6,-21,-1,-11); }
   g.closePath(); g.fill();
-  // front ear: 'one' = one up, one flopped
   if(L.ears === 'up') earUp(); else earFold();
-  const mouth = g.getTransform().transformPoint(new DOMPoint(L.snout === 'long' ? 21 : 17, 11));
+  const mouth = g.getTransform().transformPoint(new DOMPoint(L.snout === 'long' ? 20 : 16, 10));
   g.restore();
   return {head, mouth};
 }
 function bortMarks(o){
   const L = petLook(), g = mctx; if(L.mark !== 'saddle') return;
   g.beginPath();
-  if(o.pose === 'lie') g.ellipse(-4,-17,13,4.5,0,0,Math.PI*2);
-  else if(o.pose === 'sit') g.ellipse(-5,-30,7,10,0.35,0,Math.PI*2);
-  else g.ellipse(-3,-33,13,4,0,0,Math.PI*2);
+  if(o.pose === 'lie') g.ellipse(-4,-15,11,4,0,0,Math.PI*2);
+  else if(o.pose === 'sit') g.ellipse(-4,-24,6,8.5,0.35,0,Math.PI*2);
+  else g.ellipse(-4,-26,12,3.6,0,0,Math.PI*2);
   g.fill();
 }
 function bortFace(o, head){
   const g = mctx, L = petLook();
-  g.save(); g.translate(head.x, head.y); g.rotate(head.t);
+  g.save(); g.translate(head.x, head.y); g.rotate(head.t); g.scale(HS, HS);
   if(o.sleep){ g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(2,-2); g.lineTo(10,-2); g.stroke(); }
   // Open eye is stamped as a clean 2x2 pixel dot in bort(); a rasterized circle came out as a blob.
-  const eye = o.sleep ? null : g.getTransform().transformPoint(new DOMPoint(6,-3));
+  const eye = o.sleep ? null : g.getTransform().transformPoint(new DOMPoint(5,-2));
   // Head patch: dark ear and crown, stopping short of the eye so the eye stays a normal dot.
   // (It used to ring the eye, which read as one giant eye at LCD size.)
   if(L.mark === 'eyepatch'){
@@ -1154,7 +1162,6 @@ function bortFace(o, head){
   }
   if(L.snout === 'long'){ g.beginPath(); g.ellipse(25,3,3.8,3.2,0,0,Math.PI*2); g.fill(); }
   else { g.beginPath(); g.ellipse(20,2.5,3.8,3.2,0,0,Math.PI*2); g.fill(); }
-  g.lineWidth = 2.6; g.lineCap = 'round'; g.beginPath(); g.moveTo(-8,9); g.lineTo(-1,12.5); g.stroke();
   g.restore();
   return eye;
 }
@@ -1163,7 +1170,7 @@ function bortFace(o, head){
 function bortWear(o, head, ink){
   const wear = !o.noWear && store.pet && store.pet.wear; if(!wear) return false;
   const g = mctx;
-  g.save(); g.translate(head.x, head.y); g.rotate(head.t);
+  g.save(); g.translate(head.x, head.y); g.rotate(head.t); g.scale(HS, HS);
   const poly = pts => { g.beginPath(); g.moveTo(pts[0],pts[1]); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i],pts[i+1]); g.closePath(); g.fill(); };
   const dot = (x,y,r) => { g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill(); };
   const cut = fn => { if(!ink) return; g.save(); g.globalCompositeOperation = 'destination-out'; g.lineWidth = 2.6; g.lineCap = 'butt'; fn(); g.restore(); };
@@ -1183,6 +1190,7 @@ function bortWear(o, head, ink){
     g.lineWidth = 2.4; g.beginPath(); g.moveTo(0,-5); g.lineTo(-10,-3); g.stroke();   // arm to the ear
     cut(() => { g.lineWidth = 1.8; cline(3,-6.5, 6,-3.5); });           // glint
   } else if(wear === 'crown'){
+    g.translate(-6,-15); g.scale(0.8,0.8); g.translate(6,15);   // smaller now that the head is bigger
     poly([-15,-11, 2,-15, 3,-27, -1,-21, -6,-30, -10,-21, -15,-26]);
     cut(() => { dot(-11,-14.5,1.5); dot(-6,-15.5,1.5); dot(-1,-16,1.5); });   // gems in the band
     if(ink){ dot(-6,-31.5,2); dot(3,-28.5,1.6); dot(-15,-27.5,1.6); }       // ball tips
@@ -1195,10 +1203,10 @@ function bortWear(o, head, ink){
     dot(-7,14.5,3.2);                           // knot
     cut(() => { g.lineWidth = 1.6; cline(-10.5,10, -10.5,19); cline(-3.5,10, -3.5,19); });   // pleat gap around the knot
   } else if(wear === 'flower'){
-    for(let i=0;i<5;i++){ const t = i*Math.PI*2/5 - Math.PI/2; dot(-11 + Math.cos(t)*4.6, -17 + Math.sin(t)*4.6, 3); }
-    cut(() => dot(-11,-17,2.6));
-    if(ink) dot(-11,-17,1.3);                   // center
-    g.lineWidth = 2; g.beginPath(); g.moveTo(-9,-12); g.lineTo(-6,-7); g.stroke();   // stem
+    for(let i=0;i<5;i++){ const t = i*Math.PI*2/5 - Math.PI/2; dot(-16 + Math.cos(t)*4, -6 + Math.sin(t)*4, 2.6); }
+    cut(() => dot(-16,-6,2.2));
+    if(ink) dot(-16,-6,1.2);                   // center
+    g.lineWidth = 2; g.beginPath(); g.moveTo(-14,-2); g.lineTo(-11,3); g.stroke();   // stem
   } else if(wear === 'halo'){
     g.lineWidth = 3.4; g.beginPath(); g.ellipse(-4,-40,11,3.2,0,0,Math.PI*2); g.stroke();
     if(ink){ g.fillRect(8,-47,1.8,5.4); g.fillRect(6.3,-45.2,5.4,1.8); }   // twinkle
@@ -1218,6 +1226,12 @@ function bort(cx, foot, o){
   let d = g.getImageData(0,0,LW,LH).data;
   const inside = i => d[i*4+3] > 110;
   for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(!inside(i)) continue; if(!inside(i-1) || !inside(i+1) || !inside(i-LW) || !inside(i+LW)) buf[i] = 1; else if(o.solid) buf[i] = 0; }
+  const body = d;
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH);
+  bortBase(cx, foot, o); bortShape(Object.assign({}, o, {_limbs:1}));
+  d = g.getImageData(0,0,LW,LH).data;
+  const deep = i => body[i*4+3] > 110 && body[(i-1)*4+3] > 110 && body[(i+1)*4+3] > 110 && body[(i-LW)*4+3] > 110 && body[(i+LW)*4+3] > 110;
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100 && !deep(i)) buf[i] = 1; }
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,LW,LH);
   bortBase(cx, foot, o); bortMarks(o); const eye = bortFace(o, info.head);
   d = g.getImageData(0,0,LW,LH).data;
@@ -1230,7 +1244,13 @@ function bort(cx, foot, o){
     d = g.getImageData(0,0,LW,LH).data;
     for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i = y*LW+x; if(d[i*4+3] > 100) buf[i] = 1; }
   }
-  if(eye && !(store.pet && store.pet.wear === 'shades')){ const ex = Math.floor(eye.x - 0.5), ey = Math.floor(eye.y - 0.5), dot = px; dot(ex,ey); dot(ex+1,ey); dot(ex,ey+1); dot(ex+1,ey+1); }
+  if(eye && !(store.pet && store.pet.wear === 'shades')){
+    // big round chihuahua eye: 3x3 with a shine pixel, ringed in clear so it pops off the head outline
+    const ex = Math.round(eye.x) - 1, ey = Math.round(eye.y) - 1;
+    for(let yy=-1;yy<=3;yy++) for(let xx=-1;xx<=3;xx++) if((xx<0||xx>2||yy<0||yy>2) && !(xx<0&&yy<0) && !(xx>2&&yy<0) && !(xx<0&&yy>2) && !(xx>2&&yy>2)) off(ex+xx, ey+yy);
+    for(let yy=0;yy<3;yy++) for(let xx=0;xx<3;xx++) px(ex+xx, ey+yy);
+    off(ex+2, ey);
+  }
   const m = {x:Math.round(info.mouth.x), y:Math.round(info.mouth.y)};
   if(o.item === 'ball') ball(m.x, m.y);
   else if(o.item === 'disc') hline(m.x-2, m.x+2, m.y);
