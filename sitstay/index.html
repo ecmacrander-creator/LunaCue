@@ -352,7 +352,8 @@ const ACTS = {
   butterfly: {name:'Butterfly chase', unit:['lap','laps'],       T:6000, draw:drawButterfly},
   park:      {name:'Dog park',        unit:['romp','romps'],     T:6400, draw:drawPark},
   spa:       {name:'Dog spa',         unit:['spa visit','spa visits'], T:9000, draw:drawSpa},
-  yoga:      {name:'Dog yoga',        unit:['pose','poses'],     T:4200, draw:drawYoga}
+  yoga:      {name:'Dog yoga',        unit:['pose','poses'],     T:4200, draw:drawYoga},
+  swim:      {name:'Swimming',        unit:['lap','laps'],       T:9000, draw:drawSwim}
 };
 const YOGA = ['Downward dog','Upward dog',"Child's pose",'Tree pose','Savasana'];
 const TRICKS = ['Sit!','Spin!','High five!','Roll over!','Jump!','Shake!','Play dead!'];
@@ -1517,6 +1518,50 @@ function drawSpa(p){
     const x = lerp(mx, tx, ease(u)), y = GY-1 - (u > 0.55 ? Math.round(Math.sin((u-0.55)/0.45*Math.PI)*S(7)) : 0);
     bort(x, y, {step:RUN(u <= 0.55), tuck:u > 0.55, tongue:true});
     tub(false); foam(6);
+  }
+}
+/* Swimming: trot to the bank, leap into the lake, paddle out and back, climb out and shake off. */
+SP.splash = ["#...#",".#.#.","#.#.#"];
+function drawSwim(p){
+  backdrop(0, true);
+  const x0 = Math.round(LW*0.34), WL = GY + 2, swimY = WL + S(9), bob = Math.round(Math.sin(A.t*0.006));
+  const water = () => {
+    for(let y=GY; y<LH; y++) for(let x=x0+1; x<LW; x++) off(x, y);
+    vline(x0, GY, WL);                                            // the bank drops to the water
+    for(let x=x0+1; x<LW; x++){ const w = ((x + Math.floor(A.t/220)) % 7); if(w !== 3) px(x, w === 1 ? WL-1 : WL); }   // rolling surface
+  };
+  // under the surface: clear, then a drifting dash shimmer so it reads as water, not ground
+  const under = () => {
+    const sh = Math.floor(A.t/260);
+    for(let y=WL+1; y<LH; y++) for(let x=x0+1; x<LW; x++){
+      off(x, y);
+      if((y - WL) % 2 === 0 && ((x + y*3 + (y % 4 ? sh : -sh)) % 9 + 9) % 9 < 3) px(x, y);
+    }
+  };
+  const wake = (x, face) => { for(let i=1;i<=3;i++){ const wx = Math.round(x - face*(S(12) + i*3)); if(wx > x0+1 && wx < LW-1 && (Math.floor(A.t/200) + i) % 3){ px(wx, WL-1); px(wx-1, WL-2); px(wx+1, WL-2); } } };
+  const xs = LW*0.12, edge = x0 - S(8), xin = LW*0.47, xfar = LW*0.82;
+  water(); under();
+  if(p < 1200){
+    bort(lerp(xs, edge, ease(p/1200)), GY-1, {step:RUN(true), tongue:true});
+  } else if(p < 1900){
+    const u = (p - 1200)/700, y = lerp(GY-1, swimY, u) - Math.round(Math.sin(u*Math.PI)*S(14));
+    bort(lerp(edge, xin, u), y, {tuck:true, tongue:true});
+    under();
+    if(u > 0.8) spr(SP.splash, Math.round(xin) - 2, WL - 3);
+  } else if(p < 6700){
+    const back = p >= 4300, u = back ? (p - 4300)/2400 : (p - 1900)/2400, face = back ? -1 : 1;
+    const x = back ? lerp(xfar, LW*0.42, ease(u)) : lerp(xin, xfar, ease(u));
+    bort(x, swimY + bob, {face, step:RUN(true), tongue:true});
+    under(); wake(x, face);
+    if(p < 2300) spr(SP.splash, Math.round(xin) - 2, WL - 2);
+  } else if(p < 7300){
+    const u = (p - 6700)/600, y = lerp(swimY, GY-1, u) - Math.round(Math.sin(u*Math.PI)*S(10));
+    bort(lerp(LW*0.42, LW*0.2, u), y, {face:-1, tuck:true});
+    under();
+  } else {
+    const x = LW*0.2, shaking = p < 8500;
+    bort(x, GY-1, {face:-1, wag:shaking ? Math.sin(A.t*0.09)*1.5 : 0.5, sx:shaking ? (Math.floor(A.t/70) % 2 ? 0.92 : 1) : 1, tongue:!shaking});
+    if(shaking) for(let i=0;i<6;i++){ const a = i/6*Math.PI*2 + A.t*0.01, r = S(11) + ((A.t*0.03 + i*5) % 5); spr(SP.drop, x + Math.cos(a)*r, A.bf - S(12) + Math.sin(a)*r*0.6); }
   }
 }
 /* Dog yoga: a pose per cycle on a mat, held with slow breathing. The pose name shows as the caption. */
