@@ -318,7 +318,7 @@ const SURPRISE_ODDS = 0.2; // 1 in 5 finished activities
 const HAPPY = 12 * 60000;  // happy meter fills every 12 focused minutes (offset from the 10/20/25 milestones)
 const MAX_SAVERS = 2;
 const TRAIT_NAMES = {'ears:up':'Pointy ears','ears:fold':'Floppy ears','ears:one':'One floppy ear','tail:curl':'Curly tail','tail:straight':'Straight tail','tail:stub':'Stub tail',
-  'mark:none':'Plain coat','mark:saddle':'Back patch','mark:eyepatch':'Head patch','snout:short':'Short snout','snout:long':'Long snout','size:0.9':'Small pup','size:1':'Medium pup','size:1.12':'Big pup'};
+  'mark:none':'Plain coat','mark:saddle':'Back patch','mark:eyepatch':'Head patch','mark:spots':'Dalmatian spots','snout:short':'Short snout','snout:long':'Long snout','size:0.9':'Small pup','size:1':'Medium pup','size:1.12':'Big pup'};
 const GRACE = 10000;
 const GOAL = 30 * 60000;
 const MIN = 60000;
@@ -326,7 +326,7 @@ const RUNAWAY = 5;   // days without finishing an enrichment activity before the
 const RESTLESS = 3;  // days before the warning starts
 /* Each new pup gets a slightly different look: 2-3 traits change from the last pup. */
 const LOOK0 = {ears:'up', tail:'curl', mark:'none', snout:'short', size:1};
-const LOOKS = {ears:['up','fold','one'], tail:['curl','straight','stub'], mark:['none','saddle','eyepatch'], snout:['short','long'], size:[0.9,1,1.12]};
+const LOOKS = {ears:['up','fold','one'], tail:['curl','straight','stub'], mark:['none','saddle','eyepatch','spots'], snout:['short','long'], size:[0.9,1,1.12]};
 function newLook(prev){
   prev = Object.assign({}, LOOK0, prev || {});
   for(let i=0;i<60;i++){
@@ -1138,7 +1138,16 @@ function bortShape(o){
   return {head, mouth};
 }
 function bortMarks(o){
-  const L = petLook(), g = mctx; if(L.mark !== 'saddle') return;
+  const L = petLook(), g = mctx;
+  if(L.mark === 'spots'){
+    // Dalmatian: a few round spots kept inside the body so they never merge with the outline
+    const pts = o.pose === 'lie' ? [[-13,-12],[0,-10],[11,-13]]
+      : o.pose === 'sit' ? [[-2,-27],[2,-15],[-10,-9]]
+      : [[-14,-22],[-2,-21],[12,-21]];
+    for(const [x,y] of pts){ g.beginPath(); g.arc(x,y,3.6,0,Math.PI*2); g.fill(); }
+    return;
+  }
+  if(L.mark !== 'saddle') return;
   g.beginPath();
   if(o.pose === 'lie') g.ellipse(-4,-15,11,4,0,0,Math.PI*2);
   else if(o.pose === 'sit') g.ellipse(-4,-24,6,8.5,0.35,0,Math.PI*2);
@@ -1544,7 +1553,8 @@ function drawButterfly(p){
   bort(x, GY-1, {face, step:RUN(true), tongue:true});
 }
 /* Dog park: Bort plays with two park regulars, drawn with the same pup engine in different looks. */
-const PALS = [{ears:'fold', tail:'straight', mark:'saddle', snout:'long', size:0.8}, {ears:'fold', tail:'curl', mark:'none', snout:'short', size:0.72}];
+// Pal 0 is a Dalmatian, pal 1 a little scruffy pup.
+const PALS = [{ears:'fold', tail:'straight', mark:'spots', snout:'long', size:1}, {ears:'fold', tail:'curl', mark:'none', snout:'short', size:0.72}];
 // The little pal is drawn as a filled silhouette: an outline that small breaks up into stray pixels.
 function pal(i, x, y, o){
   const sv = {look:store.pet.look, hop:A.hopStart, bx:A.bx, bf:A.bf};
