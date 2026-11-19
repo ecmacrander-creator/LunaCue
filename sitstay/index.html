@@ -1141,10 +1141,10 @@ function bortMarks(o){
   const L = petLook(), g = mctx;
   if(L.mark === 'spots'){
     // Dalmatian: a few round spots kept inside the body so they never merge with the outline
-    const pts = o.pose === 'lie' ? [[-13,-12],[0,-10],[11,-13]]
-      : o.pose === 'sit' ? [[-2,-27],[2,-15],[-10,-9]]
-      : [[-14,-22],[-2,-21],[12,-21]];
-    for(const [x,y] of pts){ g.beginPath(); g.arc(x,y,3.6,0,Math.PI*2); g.fill(); }
+    const pts = o.pose === 'lie' ? [[-16,-12],[-9,-16],[-4,-10],[3,-15],[9,-10],[15,-14]]
+      : o.pose === 'sit' ? [[-3,-31],[3,-25],[-4,-21],[2,-16],[-12,-12],[-6,-8]]
+      : [[-17,-25],[-12,-20],[-6,-26],[-1,-20],[5,-25],[10,-20],[15,-25]];
+    for(const [x,y] of pts){ g.beginPath(); g.arc(x,y,2.3,0,Math.PI*2); g.fill(); }
     return;
   }
   if(L.mark !== 'saddle') return;
