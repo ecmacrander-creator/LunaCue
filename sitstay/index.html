@@ -807,10 +807,16 @@ function catchStep(now, fdt){
     g.items.push({x: S(8) + Math.random()*(LW - S(16)), y:-4, sock});
     g.next = now + g.every;
   }
-  const topY = GY - S(28), d = day();   // anything that reaches Bort's head height over his body counts: forgiving on a phone
+  const d = day();
   for(const it of g.items){
     it.y += g.fall*fdt;
-    if(it.y >= topY && it.y <= topY + 6 && Math.abs(it.x - g.bx) < S(15)){
+    // Hit box follows Bort's real shape: his head sits forward of center (toward his nose), so the box is lopsided
+    // and flips with him. Head/ears stand taller than his back. +2 = half a bone's width.
+    const fwd = (it.x - g.bx)*g.face, over = fwd > -S(14) - 2 && fwd < S(19) + 2;
+    const top = fwd > S(3) ? GY - S(28) : GY - S(14), touching = over && it.y + 2 >= top;
+    // Treats: anywhere on Bort counts, even if he runs under one that's already below his head.
+    // Socks: only first contact from above, so running past one low doesn't cost a life.
+    if(touching && (!it.sock || it.y + 2 <= top + 6)){
       it.gone = true;
       if(it.sock){ g.lives--; g.flash = now; beep([[220,.12],[180,.18]]); buzz([40,30,40]); }
       else {
