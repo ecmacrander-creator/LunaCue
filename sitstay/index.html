@@ -129,6 +129,8 @@ body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
 .tile span{font-weight:800;font-size:.74rem;line-height:1.15}
 .tile small{font-size:.66rem;color:var(--muted);font-weight:700}
 .tile.locked span{color:var(--muted)}
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.menu .btn:last-child{grid-column:1/-1}
 button.tile{font:inherit;color:var(--ink);cursor:pointer}
 button.tile[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 button.tile[aria-pressed="true"] small{color:var(--accent)}
@@ -190,7 +192,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
 <div class="app">
   <header>
     <div><h1>SitStay</h1><div class="date" id="today"></div></div>
-    <div class="top"><button class="link" id="openSettings">Settings</button><button class="link" id="openCloset">Closet</button><button class="link" id="openCol">Collection</button><button class="link" id="openKennel">Kennel</button><button class="link" id="openGraves">Graveyard</button></div>
+    <div class="top"><button class="link" id="openMenu" aria-haspopup="dialog">Menu</button></div>
   </header>
 
   <div class="shell">
@@ -312,6 +314,20 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
   </div>
 </div>
 
+<div class="sheet" id="menu" hidden>
+  <div class="card" role="dialog" aria-labelledby="menuTitle">
+    <h2 id="menuTitle">Menu</h2>
+    <div class="menu">
+      <button class="btn" id="openCloset">Closet</button>
+      <button class="btn" id="openCol">Collection</button>
+      <button class="btn" id="openKennel">Kennel</button>
+      <button class="btn" id="openGraves">Graveyard</button>
+      <button class="btn" id="openSettings">Settings</button>
+    </div>
+    <div class="actions"><button class="btn primary" id="menuDone">Done</button></div>
+  </div>
+</div>
+
 <div class="sheet" id="closet" hidden>
   <div class="card" role="dialog" aria-labelledby="closetTitle">
     <div class="colhead"><h2 id="closetTitle">Closet</h2><b id="bank">0 pts</b></div>
@@ -362,8 +378,8 @@ const DAY = 86400000;
 const FREE = 15 * 60000;
 const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat', age:3}, {id:'shades', name:'Sunglasses', age:5}, {id:'crown', name:'Crown', age:10}, {id:'tophat', name:'Top hat', age:25},
   {id:'bowtie', name:'Bow tie', rare:true}, {id:'flower', name:'Flower', rare:true}, {id:'halo', name:'Halo', rare:true},
-  {id:'collar', name:'Collar', cost:40}, {id:'bow', name:'Hair bow', cost:60}, {id:'beanie', name:'Beanie', cost:80}, {id:'cowboy', name:'Cowboy hat', cost:120}];
-const ACT_BANK = 10;   // closet points for each finished enrichment activity (on top of play and game points)
+  {id:'collar', name:'Collar', cost:150}, {id:'bow', name:'Hair bow', cost:250}, {id:'beanie', name:'Beanie', cost:400}, {id:'cowboy', name:'Cowboy hat', cost:600}];
+const ACT_BANK = 5;   // closet points for each finished enrichment activity (on top of play and game points)
 const WANDER = 3 * 60000;   // after you play with him, he pads around this long before napping again
 const RARE_TRICKS = ['Moonwalk!','Bow!','Wave!'];
 const FINDS = ['a sock. It is his now.', 'a tennis ball older than he is.', 'half a sandwich. No questions.', 'a stick of incredible quality.', 'a squeaky duck.', 'a very important leaf.'];
@@ -428,10 +444,8 @@ function blank(){ return {days:{}, mode:'idle', day:null, lastTick:0, hiddenAt:0
 function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.days) return Object.assign(blank(), s); }catch(e){} return blank(); }
 let store = load();
 /* Closet points: a spendable balance. Seeded once from history so existing pups don't start at zero. */
-if(store.bank == null){
-  store.bank = Object.values(store.days).reduce((t, d) => t + (d.playPts || 0) + (d.gamePts || 0) + (d.catchPts || 0) + ACT_BANK*Object.values(d.done || {}).filter(Boolean).length, 0);
-  store.owned = store.owned || [];
-}
+/* v2 economy (Nov 23): prices went up and the history seed is gone, so the balance restarts at 0. Items already bought stay. */
+if(store.econ !== 2){ store.bank = 0; store.owned = store.owned || []; store.econ = 2; }
 function earn(n){ store.bank = (store.bank || 0) + n; }
 const owns = (pt, w) => w.cost ? (store.owned || []).includes(w.id) : w.rare ? (pt.rare || []).includes(w.id) : (pt.age || 0) >= w.age;
 if(!store.backupId) store.backupId = newId();
@@ -2249,6 +2263,9 @@ function renderCloset(){
     save(); renderCloset(); dirty = true;
   }));
 }
+$('#openMenu').addEventListener('click', () => openSheet('#menu'));
+$('#menuDone').addEventListener('click', () => closeSheet('#menu'));
+$('#menu').addEventListener('click', e => { if(e.target === e.currentTarget || e.target.closest('.menu .btn')) closeSheet('#menu'); });
 $('#openCloset').addEventListener('click', () => { renderCloset(); openSheet('#closet'); });
 $('#closetDone').addEventListener('click', () => closeSheet('#closet'));
 $('#closet').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#closet'); });
