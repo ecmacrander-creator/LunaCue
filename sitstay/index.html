@@ -129,6 +129,19 @@ body.dim .burst{background:#000;border-color:#3E6B2B;color:#5d8a48}
 .tile span{font-weight:800;font-size:.74rem;line-height:1.15}
 .tile small{font-size:.66rem;color:var(--muted);font-weight:700}
 .tile.locked span{color:var(--muted)}
+button.tile{font:inherit;color:var(--ink);cursor:pointer}
+button.tile[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+button.tile[aria-pressed="true"] small{color:var(--accent)}
+button.tile.buy small{color:var(--accent);font-weight:800}
+button.tile:disabled{cursor:default}
+button.tile:disabled img{opacity:.55}
+.brand{display:flex;align-items:center;justify-content:center;gap:10px}
+.paws{display:flex;gap:3px}
+.paws i{width:15px;height:15px;display:block;opacity:.32}
+.paws i.on{opacity:1}
+.paws i.today{outline:1.5px solid rgba(255,255,255,.85);outline-offset:1px;border-radius:4px}
+.paws svg{width:100%;height:100%;display:block;fill:rgba(255,255,255,.95)}
+body.dim .paws{visibility:hidden}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-weight:800;font-size:.78rem;padding:7px 10px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg)}
 .chip.on{border-color:var(--ok);color:var(--ok)}
@@ -177,7 +190,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
 <div class="app">
   <header>
     <div><h1>SitStay</h1><div class="date" id="today"></div></div>
-    <div class="top"><button class="link" id="openSettings">Settings</button><button class="link" id="openCol">Collection</button><button class="link" id="openKennel">Kennel</button><button class="link" id="openGraves">Graveyard</button></div>
+    <div class="top"><button class="link" id="openSettings">Settings</button><button class="link" id="openCloset">Closet</button><button class="link" id="openCol">Collection</button><button class="link" id="openKennel">Kennel</button><button class="link" id="openGraves">Graveyard</button></div>
   </header>
 
   <div class="shell">
@@ -186,7 +199,7 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <div class="toast" id="toast" hidden></div>
       <div class="burst" id="burst" hidden><b id="burstN">+0</b><span id="burstL">Good dog points</span><small id="burstS" hidden></small></div>
     </div>
-    <div class="brand" id="brand">BORT</div>
+    <div class="brand"><span id="brand">BORT</span><span class="paws" id="paws" role="img"></span></div>
   </div>
   <p class="status" id="status"></p>
 
@@ -268,9 +281,6 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
     <button class="btn" id="pushBtn">Turn on reminders</button>
     <p class="sub">Sound</p>
     <button class="btn" id="soundBtn">Sound: on</button>
-    <p class="sub">Accessories</p>
-    <p class="note">Bort unlocks one at each dog-year milestone. Tap to wear it, tap again to take it off.</p>
-    <div class="wear" id="wearList"></div>
     <p class="sub">Your dogs</p>
     <p class="note" id="dogsNote"></p>
     <p class="sub">Backup</p>
@@ -299,6 +309,16 @@ body.dim .shell::after{content:"Tap to wake";display:block;text-align:center;fon
       <button class="btn" id="pCatch" disabled>Treat Catch</button>
     </div>
     <div class="actions"><button class="btn primary" id="playClose">Done</button></div>
+  </div>
+</div>
+
+<div class="sheet" id="closet" hidden>
+  <div class="card" role="dialog" aria-labelledby="closetTitle">
+    <div class="colhead"><h2 id="closetTitle">Closet</h2><b id="bank">0 pts</b></div>
+    <p class="note" id="closetNote"></p>
+    <p class="sub">Shop</p><div class="tiles" id="shopList"></div>
+    <p class="sub">Unlocked by age and surprises</p><div class="tiles" id="wearList"></div>
+    <div class="actions"><button class="btn primary" id="closetDone">Done</button></div>
   </div>
 </div>
 
@@ -341,7 +361,10 @@ let PUP = 'Bort';
 const DAY = 86400000;
 const FREE = 15 * 60000;
 const WEAR = [{id:'bandana', name:'Bandana', age:1}, {id:'hat', name:'Party hat', age:3}, {id:'shades', name:'Sunglasses', age:5}, {id:'crown', name:'Crown', age:10}, {id:'tophat', name:'Top hat', age:25},
-  {id:'bowtie', name:'Bow tie', rare:true}, {id:'flower', name:'Flower', rare:true}, {id:'halo', name:'Halo', rare:true}];
+  {id:'bowtie', name:'Bow tie', rare:true}, {id:'flower', name:'Flower', rare:true}, {id:'halo', name:'Halo', rare:true},
+  {id:'collar', name:'Collar', cost:40}, {id:'bow', name:'Hair bow', cost:60}, {id:'beanie', name:'Beanie', cost:80}, {id:'cowboy', name:'Cowboy hat', cost:120}];
+const ACT_BANK = 10;   // closet points for each finished enrichment activity (on top of play and game points)
+const WANDER = 3 * 60000;   // after you play with him, he pads around this long before napping again
 const RARE_TRICKS = ['Moonwalk!','Bow!','Wave!'];
 const FINDS = ['a sock. It is his now.', 'a tennis ball older than he is.', 'half a sandwich. No questions.', 'a stick of incredible quality.', 'a squeaky duck.', 'a very important leaf.'];
 const SURPRISE_ODDS = 0.2; // 1 in 5 finished activities
@@ -404,6 +427,13 @@ function newId(){ try{ return crypto.randomUUID(); }catch(e){ return 'x'.repeat(
 function blank(){ return {days:{}, mode:'idle', day:null, lastTick:0, hiddenAt:0, activity:null, pet:newPet('Bort'), kennel:[], graveyard:[], goalMin:240, freeStart:0, backupId:newId(), lastBackup:0}; }
 function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.days) return Object.assign(blank(), s); }catch(e){} return blank(); }
 let store = load();
+/* Closet points: a spendable balance. Seeded once from history so existing pups don't start at zero. */
+if(store.bank == null){
+  store.bank = Object.values(store.days).reduce((t, d) => t + (d.playPts || 0) + (d.gamePts || 0) + (d.catchPts || 0) + ACT_BANK*Object.values(d.done || {}).filter(Boolean).length, 0);
+  store.owned = store.owned || [];
+}
+function earn(n){ store.bank = (store.bank || 0) + n; }
+const owns = (pt, w) => w.cost ? (store.owned || []).includes(w.id) : w.rare ? (pt.rare || []).includes(w.id) : (pt.age || 0) >= w.age;
 if(!store.backupId) store.backupId = newId();
 if(!store.goalMin) store.goalMin = 240;
 // Pups from before looks existed: the first Bort keeps the classic look, later pups get a variation.
@@ -519,7 +549,7 @@ setInterval(() => { if(store.mode === 'playing' && document.visibilityState === 
 ['focus','pageshow'].forEach(ev => window.addEventListener(ev, () => { if(store.mode === 'playing') requestWake(); }));
 
 /* ---------- focus + care logic ---------- */
-const A = {game:null, play:null, playStart:0, playUntil:0, playMsg:'', playTrick:0, lastTrick:-1, danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
+const A = {wanderStart:0, wanderUntil:0, game:null, play:null, playStart:0, playUntil:0, playMsg:'', playTrick:0, lastTrick:-1, danceStart:0, danceUntil:0, returnLevel:1, hopStart:-1e9, sparkUntil:0, bx:0, bf:0, t:0, world:0, cloud:0, lastCycle:0, returnStart:0, returnUntil:0, partyStart:0, partyUntil:0, eatStart:0, eatUntil:0, poopStart:0, poopUntil:0, cleanStart:0, cleanUntil:0, caption:''};
 
 function rollover(){
   if(store.day && store.day !== todayKey()){
@@ -647,7 +677,7 @@ function tick(now){
         if(d.poops < 3){ d.poops++; A.poopStart = now; A.poopUntil = now + 1800; showToast(PUP+' pooped. Clean it up when this activity is done.'); save(); }
       }
       if(!d.done[a] && d.actMs[a] >= GOAL){
-        d.done[a] = true; store.pet.lastEnriched = now; A.partyStart = now; A.partyUntil = now + PARTY;
+        d.done[a] = true; earn(ACT_BANK); store.pet.lastEnriched = now; A.partyStart = now; A.partyUntil = now + PARTY;
         const left = d.acts.filter(x => !d.done[x]).length;
         // If the screen is dimmed, brighten long enough to see the whole celebration, then dim again.
         if(dimmed){ setDim(false); lastTouch = now - DIM_AFTER + PARTY + 3000; }
@@ -684,14 +714,14 @@ function startDay(){
   if(!d.startedAt){ d.startedAt = Date.now(); d.hungry = true; greet(10*MIN, Date.now()); showToast('Good morning! '+PUP+' wants breakfast. Tap Feed.'); }
   else if(sinceFun(Date.now()) >= RESTLESS*DAY) showToast(PUP+' is restless. Finish an activity today.');
   d.sessions = (d.sessions || 0) + 1;
-  A.playUntil = 0; A.game = null; d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
+  A.playUntil = 0; A.game = null; A.wanderUntil = 0; d.ended = false; store.lastTick = Date.now(); currentAct(); A.t = 0; A.lastCycle = 0; requestWake(); save(); render();
 }
 function takeBreak(){
   if(store.mode === 'free') ping('free', 0, '');
   const d = day(); d.streakMs = 0; resetProgress(d); store.mode = 'break'; releaseWake(); ping('away', 0, ''); save(); render();
   showToast('Focus session ended. Unfinished activities start over next session.');
 }
-function backToWork(){ A.playUntil = 0; A.game = null; const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
+function backToWork(){ A.playUntil = 0; A.game = null; A.wanderUntil = 0; const d = day(); d.sessions = (d.sessions || 0) + 1; store.mode = 'playing'; store.lastTick = Date.now(); requestWake(); save(); render(); }
 function startFree(){
   const d = day(); if(store.mode !== 'playing' || d.freeUsed) return;
   d.freeUsed = true; store.mode = 'free'; store.freeStart = Date.now(); releaseWake();
@@ -713,7 +743,7 @@ const PLAY_PTS = 2, PLAY_PTS_MAX = 10;   // small reward per treat/trick/dance, 
 function playReward(ms){
   const d = day(); d.playPts = d.playPts || 0;
   if(d.playPts >= PLAY_PTS_MAX) return false;
-  d.playPts = Math.min(PLAY_PTS_MAX, d.playPts + PLAY_PTS); save();
+  const add = Math.min(PLAY_PTS_MAX, d.playPts + PLAY_PTS) - d.playPts; d.playPts += add; earn(add); save();
   setTimeout(() => { beep(SFX.tick); showBurst('', d.playPts >= PLAY_PTS_MAX ? 'Play points maxed today' : 'Good dog points', 1500, PLAY_PTS); }, ms);
   return true;
 }
@@ -737,7 +767,22 @@ function play(kind){
     beep(SFX.dance); buzz([20,40,20,40,20]);
     playReward(2400);
   }
+  A.wanderStart = A.playUntil; A.wanderUntil = A.playUntil + WANDER;
   save(); dirty = true; render();
+}
+function wanderAfter(now){ A.wanderStart = now; A.wanderUntil = now + WANDER; }
+const wandering = now => store.mode !== 'playing' && !A.game && now >= A.playUntil && now < A.wanderUntil && !store.pet.dead;
+/* After playtime Bort stays up and pads around the yard: walk somewhere, then sit, sniff or wag, then pick a new spot. */
+function drawWander(now){
+  backdrop(0);
+  const SEG = 5600, rt = Math.max(0, now - A.wanderStart), k = Math.floor(rt/SEG), u = (rt % SEG)/SEG;
+  const spot = i => i < 0 ? LW*0.45 : LW*(0.22 + 0.56*hash(i*7.3 + 11));
+  const x0 = spot(k-1), x1 = spot(k), face = x1 >= x0 ? 1 : -1, wag = Math.sin(now*0.03), WALK = 0.45;
+  if(u < WALK){ bort(lerp(x0, x1, ease(u/WALK)), GY-1, {face, wag, step: Math.floor(now/170) % 2 === 1}); return; }
+  const kind = Math.floor(hash(k*3.1 + 5)*3);
+  if(kind === 0) bort(x1, GY-1, {face, pose:'sit', wag, tongue:true});
+  else if(kind === 1){ bort(x1, GY-1, {face, down:true, wag:wag*0.4}); if(Math.floor(now/400) % 2) spr(SP.q, x1 + face*S(16), GY - S(28)); }
+  else bort(x1, GY-1, {face, wag, tongue:true, tilt: Math.floor(now/900) % 2 ? 0.2 : 0});
 }
 function drawPlay(now){
   const rt = now - A.playStart, x = Math.round(LW*0.45);
@@ -785,13 +830,13 @@ function gameStep(now, fdt){
     if(!h.done && h.x < bx - S(17)){
       h.done = true; g.cleared++; g.speed = Math.min(g.maxSpeed, g.speed*1.025);
       d.gamePts = d.gamePts || 0;
-      if(d.gamePts < GAME_PTS_MAX){ d.gamePts++; g.earned++; }
+      if(d.gamePts < GAME_PTS_MAX){ d.gamePts++; g.earned++; earn(1); }
     } else if(!h.done && Math.abs(h.x - bx) < S(7) && hy + S(3) < HURDLE_H() + 1){   // S(3): tucked legs
       g.over = now; g.crashX = h.x;
       store.hurdleBest = Math.max(store.hurdleBest || 0, g.cleared);
       beep([[392,.12],[311,.12],[262,.3]]); buzz([60,40,120]);
       if(g.earned){ setTimeout(() => showBurst('', d.gamePts >= GAME_PTS_MAX ? 'Hurdle points maxed today' : 'Good dog points', 1800, g.earned), 700); }
-      setTimeout(() => { A.game = null; save(); render(); }, 2600);
+      setTimeout(() => { A.game = null; wanderAfter(Date.now()); save(); render(); }, 2600);
       save(); break;
     }
   }
@@ -852,7 +897,7 @@ function catchStep(now, fdt){
       if(it.sock){ g.lives--; g.flash = now; beep([[220,.12],[180,.18]]); buzz([40,30,40]); }
       else {
         g.caught++; g.fall = Math.min(0.019*LW/48*1.7, g.fall*1.03); g.every = Math.max(650, g.every*0.96);
-        d.catchPts = d.catchPts || 0; if(d.catchPts < CATCH_PTS_MAX){ d.catchPts++; g.earned++; }
+        d.catchPts = d.catchPts || 0; if(d.catchPts < CATCH_PTS_MAX){ d.catchPts++; g.earned++; earn(1); }
         g.chomp = now; beep([[880,.04],[1175,.06]]);
       }
     } else if(it.y > GY){
@@ -866,7 +911,7 @@ function catchStep(now, fdt){
     store.catchBest = Math.max(store.catchBest || 0, g.caught);
     beep([[392,.12],[311,.12],[262,.3]]); buzz([60,40,120]);
     if(g.earned){ setTimeout(() => showBurst('', d.catchPts >= CATCH_PTS_MAX ? 'Catch points maxed today' : 'Good dog points', 1800, g.earned), 700); }
-    setTimeout(() => { A.game = null; save(); render(); }, 2600);
+    setTimeout(() => { A.game = null; wanderAfter(Date.now()); save(); render(); }, 2600);
     save();
   }
   dirty = true;
@@ -888,7 +933,7 @@ function feed(){
   const now = Date.now(); A.eatStart = now; A.eatUntil = now + 3000; save(); render();
 }
 function dayComplete(d){ return !!d && d.acts.every(a => d.done[a]); }
-function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key || store.agedDay === key || !dayComplete(store.days[key])) return; pt.age++; pt.lastAgedKey = key; store.agedDay = key; setTimeout(checkNewDog, 6500); const w = WEAR.find(x => x.age === pt.age); if(w) setTimeout(() => showToast(pt.name+' unlocked the '+w.name+'. Put it on in Settings.'), 4800); save(); }
+function ageUp(key){ const pt = store.pet; if(pt.dead || pt.lastAgedKey === key || store.agedDay === key || !dayComplete(store.days[key])) return; pt.age++; pt.lastAgedKey = key; store.agedDay = key; setTimeout(checkNewDog, 6500); const w = WEAR.find(x => x.age === pt.age); if(w) setTimeout(() => showToast(pt.name+' unlocked the '+w.name+'. Put it on in the Closet.'), 4800); save(); }
 const yrs = n => n + (n === 1 ? ' dog year' : ' dog years');
 const shortDate = t => new Date(t).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'});
 const sinceFun = now => Math.max(0, now - (store.pet.lastEnriched || now));
@@ -1009,7 +1054,7 @@ function collected(){
   const wear = new Set(), tricks = new Set(TRICKS), traits = new Set();
   allPups().forEach(p => {
     WEAR.forEach(w => { if(!w.rare && (p.age || 0) >= w.age) wear.add(w.id); });
-    (p.rare || []).forEach(id => wear.add(id)); (p.tricks || []).forEach(t => tricks.add(t));
+    (p.rare || []).forEach(id => wear.add(id)); (store.owned || []).forEach(id => wear.add(id)); (p.tricks || []).forEach(t => tricks.add(t));
     const l = Object.assign({}, LOOK0, p.look); Object.keys(LOOKS).forEach(k => traits.add(k+':'+l[k]));
   });
   return {wear, tricks, traits};
@@ -1038,7 +1083,7 @@ function miniPup(look, wear, locked){
 function openCollection(){
   const got = collected();
   const tile = (img, name, sub, locked) => '<div class="tile'+(locked ? ' locked' : '')+'"><img alt="" src="'+img+'"><span>'+name+'</span><small>'+sub+'</small></div>';
-  $('#colWear').innerHTML = WEAR.map(w => { const ok = got.wear.has(w.id); return tile(miniPup(LOOK0, w.id, !ok), ok || !w.rare ? w.name : '???', ok ? 'Found' : w.rare ? 'Surprise only' : 'Age '+w.age, !ok); }).join('');
+  $('#colWear').innerHTML = WEAR.map(w => { const ok = got.wear.has(w.id); return tile(miniPup(LOOK0, w.id, !ok), ok || !w.rare ? w.name : '???', ok ? 'Found' : w.rare ? 'Surprise only' : w.cost ? 'Closet · '+w.cost+' pts' : 'Age '+w.age, !ok); }).join('');
   const allTricks = TRICKS.concat(RARE_TRICKS);
   $('#colTricks').innerHTML = allTricks.map(t => { const ok = got.tricks.has(t); return '<span class="chip '+(ok ? 'on' : 'locked')+'">'+(ok ? t.replace('!','')+' ✓' : '??? · surprise')+'</span>'; }).join('');
   const keys = Object.keys(TRAIT_NAMES);
@@ -1308,9 +1353,10 @@ function bortWear(o, head, ink){
     poly([-15,7, -22,4, -20,12]);               // knot tails behind the neck
     cut(() => { dot(-7,13,1.6); dot(-6,19.5,1.6); });   // polka dots
   } else if(wear === 'hat'){
-    poly([-16,-10, 4,-15, -6,-38]);
-    dot(-6,-40,4.2);                            // pom-pom
-    cut(() => cline(-13,-21, 1,-24));           // one stripe
+    // small cone tucked between the ears (the old one was wider than the head and swallowed both ears)
+    poly([-11,-9, 2,-12, -4,-35]);
+    dot(-4,-36.5,2.6);                          // pom-pom
+    cut(() => { g.lineWidth = 2; cline(-8,-19, 0,-21); });   // one stripe
   } else if(wear === 'shades'){
     g.beginPath(); g.roundRect ? g.roundRect(0,-8,10,7.5,2) : g.rect(0,-8,10,7.5); g.fill();   // near lens
     g.fillRect(12,-7,5,6);                      // far lens peeking past the snout
@@ -1335,6 +1381,23 @@ function bortWear(o, head, ink){
     cut(() => dot(-16,-6,2.2));
     if(ink) dot(-16,-6,1.2);                   // center
     g.lineWidth = 2; g.beginPath(); g.moveTo(-14,-2); g.lineTo(-11,3); g.stroke();   // stem
+  } else if(wear === 'collar'){
+    g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(-16,5); g.quadraticCurveTo(-6,13, 4,9); g.stroke();
+    dot(-5,17,3.4);                             // tag
+    cut(() => { dot(-12,8.5,1.2); dot(-6,10.5,1.2); dot(0,10.5,1.2); });   // studs
+  } else if(wear === 'bow'){
+    poly([-4,-14, -16,-22, -15,-6]); poly([-4,-14, 8,-22, 7,-6]);   // two loops on top of the head
+    dot(-4,-14,3);
+    cut(() => { g.lineWidth = 1.8; cline(-11,-17, -11,-10); cline(3,-17, 3,-10); });
+  } else if(wear === 'beanie'){
+    g.beginPath(); g.moveTo(-17,-8); g.bezierCurveTo(-17,-26, 9,-26, 9,-10); g.closePath(); g.fill();   // knit dome (ears poke through)
+    g.fillRect(-18,-11,28,5);                   // folded cuff
+    dot(-4,-25,3);                              // pom-pom
+    cut(() => { g.lineWidth = 1.4; for(let x=-14;x<=6;x+=5) cline(x,-10, x,-7); });   // ribbing
+  } else if(wear === 'cowboy'){
+    g.beginPath(); g.ellipse(-4,-13,19,3,-0.05,0,Math.PI*2); g.fill();   // brim
+    g.beginPath(); g.moveTo(-13,-13); g.lineTo(-12,-27); g.quadraticCurveTo(-4,-23, 4,-27); g.lineTo(5,-13); g.closePath(); g.fill();   // dented crown
+    cut(() => { g.fillRect(-12,-17.5,17,2.4); });   // hat band
   } else if(wear === 'halo'){
     g.lineWidth = 3.4; g.beginPath(); g.ellipse(-4,-40,11,3.2,0,0,Math.PI*2); g.stroke();
     if(ink){ g.fillRect(8,-47,1.8,5.4); g.fillRect(6.3,-45.2,5.4,1.8); }   // twinkle
@@ -1376,6 +1439,11 @@ function bort(cx, foot, o){
     // filled silhouette (small park pal): the eye is a clear 2x2 window so it reads at tiny size
     const ex = Math.round(eye.x) - 1, ey = Math.round(eye.y) - 1;
     off(ex, ey); off(ex+1, ey); off(ex, ey+1); off(ex+1, ey+1);
+  } else if(eye && !(store.pet && store.pet.wear === 'shades') && pupScale() < 0.38){
+    // small Bort (games): a 2x2 eye, or the 3x3 eye would cover half his head
+    const ex = Math.round(eye.x) - 1, ey = Math.round(eye.y) - 1;
+    off(ex-1, ey); off(ex-1, ey+1); off(ex+2, ey); off(ex+2, ey+1); off(ex, ey-1); off(ex+1, ey-1); off(ex, ey+2); off(ex+1, ey+2);
+    px(ex, ey); px(ex+1, ey); px(ex, ey+1); px(ex+1, ey+1);
   } else if(eye && !(store.pet && store.pet.wear === 'shades')){
     // big round chihuahua eye: 3x3 with a shine pixel, ringed in clear so it pops off the head outline
     const ex = Math.round(eye.x) - 1, ey = Math.round(eye.y) - 1;
@@ -1999,7 +2067,8 @@ function frame(){
       else if(dancing) drawDance(now);
       else if(pooping) drawPoop(now);
       else { A.caption = ''; const a = currentAct(), T = ACTS[a].T; ACTS[a].draw(A.t % T, Math.floor(A.t / T)); }
-    } else if(store.mode === 'ended') drawKennel(now);
+    } else if(wandering(now)) drawWander(now);
+    else if(store.mode === 'ended') drawKennel(now);
     else if(store.mode === 'free') drawSleep(now);
     else drawSleep(now);
     if(!store.pet.dead){ careLayer(now); sparkleLayer(now); }
@@ -2044,11 +2113,13 @@ function render(){
     st = !g.began ? 'Hurdles: tap the screen to make '+PUP+' jump.' : g.over ? 'Oof! '+plural(g.cleared, ['hurdle','hurdles'])+' cleared'+(g.cleared > 0 && g.cleared >= best ? ' · new best!' : ' · best '+best+'.')
       : 'Hurdles · '+g.cleared+' cleared'+(capped ? ' · points maxed today' : '');
     }
-  } else if(playing && !store.pet.dead) st = A.play === 'trick' ? (A.caption ? PUP+': '+A.caption : PUP+' is getting ready...') : A.playMsg;
+  } else if(wandering(Date.now())) st = PUP+' is wandering around the yard. Nap time in '+Math.max(1, Math.ceil((A.wanderUntil - Date.now())/MIN))+' min.';
+  else if(playing && !store.pet.dead) st = A.play === 'trick' ? (A.caption ? PUP+': '+A.caption : PUP+' is getting ready...') : A.playMsg;
   if(store.pet.dead) st = store.pet.cause === 'ran' ? PUP+' ran away. Adopt a new puppy.' : PUP+' has died. Visit the emergency vet or lay '+PUP+' to rest.';
   $('#status').textContent = st;
   const sk = streak();
   $('#brand').textContent = PUP.toUpperCase()+' · AGE '+store.pet.age+(sk ? ' · 🔥 '+sk : '');
+  renderPaws();
   syncPings();
   $('#statFocus').textContent = fmt(d.focusMs);
   const gm = store.goalMin*MIN; $('#goalFill').style.width = Math.min(100, d.focusMs/gm*100)+'%'; $('#goalBar').classList.toggle('met', d.focusMs >= gm); $('#goalText').textContent = 'Goal '+fmtGoal(store.goalMin);
@@ -2155,12 +2226,41 @@ function renderSettings(){
   $('#pushBtn').hidden = !pushOk || !!store.push;
   $('#backupNote').textContent = cfg ? 'Your pup, graveyard and history back up automatically'+(store.lastBackup ? ' (last backup '+new Date(store.lastBackup).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+')' : '')+'. Save this code somewhere safe, like Notes, to restore on a new phone.' : 'Backup works in the SitStay app on your Home Screen.';
   $('#backupCode').textContent = store.backupId;
-  const pt = store.pet;
-  $('#wearList').innerHTML = WEAR.map(w => {
-    const ok = w.rare ? (pt.rare || []).includes(w.id) : pt.age >= w.age;
-    return '<button class="wchip" data-wear="'+w.id+'" aria-pressed="'+(pt.wear === w.id)+'"'+(ok ? '' : ' disabled')+'>'+(ok || !w.rare ? w.name : '???')+'<small>'+(ok ? (pt.wear === w.id ? 'Wearing' : w.rare ? 'Surprise find' : 'Unlocked') : w.rare ? 'Surprise only' : 'Age '+w.age)+'</small></button>';
-  }).join('');
-  $('#wearList').querySelectorAll('.wchip').forEach(b => b.addEventListener('click', () => { pt.wear = pt.wear === b.dataset.wear ? null : b.dataset.wear; save(); renderSettings(); dirty = true; }));
+}
+/* Closet: wear anything unlocked; spend closet points on shop items. Bought items belong to every dog you have. */
+function renderCloset(){
+  const pt = store.pet, bank = store.bank || 0;
+  $('#bank').textContent = bank+' pts';
+  $('#closetNote').textContent = 'Earn points from play, games and every finished enrichment activity (+'+ACT_BANK+'). Tap something you own to put it on '+pt.name+', tap again to take it off.';
+  const tile = w => {
+    const ok = owns(pt, w), on = pt.wear === w.id, buy = !ok && w.cost, afford = buy && bank >= w.cost;
+    const sub = on ? 'Wearing' : ok ? 'Tap to wear' : buy ? (afford ? 'Buy · '+w.cost+' pts' : w.cost+' pts · need '+(w.cost - bank)+' more') : w.rare ? 'Surprise only' : 'Age '+w.age;
+    return '<button class="tile'+(ok ? '' : ' locked')+(afford ? ' buy' : '')+'" data-wear="'+w.id+'" aria-pressed="'+on+'"'+(ok || afford ? '' : ' disabled')+'><img alt="" src="'+miniPup(pt.look || LOOK0, w.id, !ok && !afford)+'"><span>'+(ok || !w.rare ? w.name : '???')+'</span><small>'+sub+'</small></button>';
+  };
+  $('#shopList').innerHTML = WEAR.filter(w => w.cost).map(tile).join('');
+  $('#wearList').innerHTML = WEAR.filter(w => !w.cost).map(tile).join('');
+  document.querySelectorAll('#closet button.tile').forEach(b => b.addEventListener('click', () => {
+    const w = WEAR.find(x => x.id === b.dataset.wear);
+    if(!owns(pt, w)){
+      if(!w.cost || (store.bank || 0) < w.cost) return;
+      store.bank -= w.cost; store.owned = (store.owned || []).concat(w.id); pt.wear = w.id;
+      beep(SFX.tick); showToast(pt.name+' got the '+w.name+'!');
+    } else pt.wear = pt.wear === w.id ? null : w.id;
+    save(); renderCloset(); dirty = true;
+  }));
+}
+$('#openCloset').addEventListener('click', () => { renderCloset(); openSheet('#closet'); });
+$('#closetDone').addEventListener('click', () => closeSheet('#closet'));
+$('#closet').addEventListener('click', e => { if(e.target === e.currentTarget) closeSheet('#closet'); });
+/* Paw-print week: last 7 days, a bright paw for every day all three activities got done. */
+const PAW = '<svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="13.5" rx="5" ry="4.2"/><circle cx="4" cy="8" r="2.1"/><circle cx="8" cy="4.6" r="2.2"/><circle cx="12" cy="4.6" r="2.2"/><circle cx="16" cy="8" r="2.1"/></svg>';
+let pawKey = '';
+function renderPaws(){
+  const days = []; for(let i=6;i>=0;i--){ const dt = new Date(); dt.setDate(dt.getDate()-i); days.push(keyOf(dt)); }
+  const on = days.map(k => dayComplete(store.days[k])), key = days[6]+on.join('');
+  if(key === pawKey) return; pawKey = key;
+  $('#paws').innerHTML = on.map((v,i) => '<i class="'+(v ? 'on' : '')+(i === 6 ? ' today' : '')+'">'+PAW+'</i>').join('');
+  $('#paws').setAttribute('aria-label', on.filter(Boolean).length+' of the last 7 days fully done');
 }
 $('#gravesClose').addEventListener('click', () => closeSheet('#graves'));
 $('#openCol').addEventListener('click', openCollection);
@@ -2197,7 +2297,7 @@ function openSummary(){
   if(isNew){ bEl.textContent = 'New personal best! Old best: '+store.prevBest; setTimeout(() => { bEl.classList.add('new'); beep(SFX.best); }, 1250); }
   else bEl.textContent = store.best && store.best.score ? 'Personal best: '+store.best.score : '';
   // streak + dog years
-  const sk = streak(), pt = store.pet, next = WEAR.find(w => !w.rare && w.age > pt.age);
+  const sk = streak(), pt = store.pet, next = WEAR.find(w => w.age && w.age > pt.age);
   const ageLine = next ? next.name+' at age '+next.age+' ('+(next.age - pt.age)+' more full '+(next.age - pt.age === 1 ? 'day' : 'days')+')' : 'Everything unlocked';
   $('#sumStreak').innerHTML = '<dt>Streak</dt><dd'+(sk ? ' class="ok">🔥 '+sk+(sk === 1 ? ' day' : ' days') : '>Finish all 3 to start one')+'</dd>'+
     '<dt>Streak savers</dt><dd>'+(store.savers || 0)+' of '+MAX_SAVERS+'</dd>'+
